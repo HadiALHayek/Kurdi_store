@@ -1,0 +1,34 @@
+Improvements you can make (highest impact first)
+Add stronger filters (left sidebar)
+Price range, brand, stock status, socket, memory type, wattage, form factor.
+Keep category as top filter, then “technical filters” below.
+Show applied filter chips above products
+Example: CPU, AMD, DDR5, Under $300.
+Each chip removable + one-click “Clear all”.
+Add sorting controls
+Recommended, Price low-high, Price high-low, Newest, Most popular.
+Upgrade product cards for comparison speed
+Show 3–5 key specs in fixed rows (socket, memory type, TDP, wattage, stock).
+Add quick actions: Compare, Save, Add to Builder.
+Add compatibility hints in list cards
+Tiny status label: Compatible, Needs BIOS update, May not fit case.
+Hover/click to see why.
+Improve prebuilt slider UX
+Add manual arrows + drag/swipe, pause autoplay by default on mobile.
+Keep auto-scroll optional.
+Sticky summary bar (builder context)
+Show selected parts count + total price + estimated wattage while scrolling.
+No-results recovery
+When filters return zero, suggest nearest options (Remove RAM speed, Expand budget +$50).
+Layout/visual improvements for your current page
+Desktop structure
+Keep: left sticky filters, centered product grid (you already asked this).
+Set products area max-width around 960–1040px for balanced reading.
+Consistent card heights
+Uniform image ratio and fixed spec area height to align rows.
+RTL/LTR stability
+Keep structural grid in LTR (for placement), keep text content RTL when Arabic.
+
+
+  git config --global user.email "hadialhaek@gmail.com"
+  git config --global user.name "HadiALHayek"

@@ -1,0 +1,925 @@
+import { useMemo, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { Navigate } from 'react-router-dom'
+import { AdminLayout } from '../components/layout/AdminLayout'
+import { Modal } from '../components/ui/Modal'
+import { useI18n } from '../i18n'
+import { useAnalyticsStore } from '../store/analyticsStore'
+import { useBundlesStore } from '../store/bundlesStore'
+import { useBuildTemplatesStore } from '../store/buildTemplatesStore'
+import { useProductsStore } from '../store/productsStore'
+import { useSettingsStore } from '../store/settingsStore'
+import type { Category, Product } from '../types'
+import { formatPrice } from '../utils/compatibility'
+import { downloadCsv, parseProductsCsv, productsToCsv } from '../utils/productCsv'
+
+type View = 'products' | 'add' | 'analytics' | 'settings'
+
+const categories: Category[] = [
+  'Prebuilt PC',
+  'CPU',
+  'Motherboard',
+  'RAM',
+  'GPU',
+  'Storage',
+  'PSU',
+  'Case',
+  'Cooling',
+]
+const compatibilitySpecKeys = ['socket', 'tdp', 'memoryType', 'wattage', 'formFactor', 'tdpSupport'] as const
+const prebuiltSpecKeys = [
+  'cpu',
+  'gpu',
+  'ram',
+  'storage',
+  'motherboard',
+  'psu',
+  'cooling',
+  'resolutionTarget',
+  'performanceTier',
+  'os',
+] as const
+type CompatibilitySpecKey = (typeof compatibilitySpecKeys)[number]
+type PrebuiltSpecKey = (typeof prebuiltSpecKeys)[number]
+type SpecKey = CompatibilitySpecKey | PrebuiltSpecKey
+
+const specValueOptionsByKey: Record<SpecKey, string[]> = {
+  socket: ['AM4', 'AM5', 'LGA1700', 'LGA1851'],
+  tdp: ['65', '95', '105', '120', '125', '165', '170', '200', '220', '253', '300'],
+  memoryType: ['DDR4', 'DDR5'],
+  wattage: ['450', '550', '650', '750', '850', '1000', '1200'],
+  formFactor: ['ATX', 'mATX', 'ITX'],
+  tdpSupport: ['95', '125', '170', '180', '220', '250', '280', '300'],
+  cpu: ['Ryzen 5 7600', 'Ryzen 7 9700X', 'Ryzen 7 9800X3D', 'Core i7-14700K', 'Core Ultra 7 265KF'],
+  gpu: ['RTX 4060 8GB', 'RTX 4070 12GB', 'RTX 5070 12GB', 'RTX 5080 16GB', 'RX 7600 8GB', 'RX 7900 XTX 24GB'],
+  ram: ['16GB DDR5', '32GB DDR5', '64GB DDR5'],
+  storage: ['1TB NVMe', '2TB NVMe', '1TB NVMe + 2TB HDD'],
+  motherboard: ['B650 mATX', 'B760 ATX', 'X870 ATX', 'Z890 ATX'],
+  psu: ['650W Gold', '750W Gold', '850W Gold', '1000W Gold', '1200W Platinum'],
+  cooling: ['Tower Air Cooler', 'Dual Tower Air Cooler', '240mm AIO', '360mm AIO'],
+  resolutionTarget: ['1080p', '1440p', '4K'],
+  performanceTier: ['Entry', 'Mainstream', 'High-End', 'Extreme'],
+  os: ['Windows 11 Home', 'Windows 11 Pro', 'No OS'],
+}
+
+const emptyDraft = {
+  name: '',
+  description: '',
+  price: 0,
+  previousPrice: undefined as number | undefined,
+  category: 'CPU' as Category,
+  imageUrl: '',
+  imageUrls: [] as string[],
+  stock: 0,
+  sku: '',
+  staffPick: false,
+  discontinued: false,
+  allowBackorder: false,
+  staffNotes: '',
+  instagramPostUrl: '',
+  seoTitle: '',
+  seoDescription: '',
+  useCaseTags: [] as Product['useCaseTags'],
+  specs: {} as Record<string, string>,
+}
+
+export function AdminDashboard() {
+  const { t } = useI18n()
+  const session = sessionStorage.getItem('kurdi_admin_session')
+  const { products, addProduct, updateProduct, deleteProduct, duplicateProduct, importProducts, exportProducts } =
+    useProductsStore()
+  const analyticsEvents = useAnalyticsStore((s) => s.events)
+  const exportAnalyticsCsv = useAnalyticsStore((s) => s.exportCsv)
+  const clearAnalytics = useAnalyticsStore((s) => s.clear)
+  const [view, setView] = useState<View>('products')
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'name' | 'price' | 'category'>('name')
+  const [editing, setEditing] = useState<Product | null>(null)
+  const [draft, setDraft] = useState(emptyDraft)
+  const [toast, setToast] = useState('')
+  const settingsState = useSettingsStore((state) => state.settings)
+  const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const [settingsDraft, setSettingsDraft] = useState(settingsState)
+  const templates = useBuildTemplatesStore((s) => s.templates)
+  const addTemplate = useBuildTemplatesStore((s) => s.add)
+  const removeTemplate = useBuildTemplatesStore((s) => s.remove)
+  const bundles = useBundlesStore((s) => s.bundles)
+  const addBundle = useBundlesStore((s) => s.add)
+  const removeBundle = useBundlesStore((s) => s.remove)
+  const [tplName, setTplName] = useState('')
+  const [tplDesc, setTplDesc] = useState('')
+  const [tplParts, setTplParts] = useState('CPU: cpu-7800x3d\nGPU: gpu-4070')
+  const [bndName, setBndName] = useState('')
+  const [bndIds, setBndIds] = useState('')
+  const [bndLabel, setBndLabel] = useState('')
+
+  const filtered = useMemo(() => {
+    const searched = products.filter((product) =>
+      `${product.name} ${product.category}`.toLowerCase().includes(search.toLowerCase()),
+    )
+    return [...searched].sort((a, b) => {
+      if (sortBy === 'price') return a.price - b.price
+      return String(a[sortBy]).localeCompare(String(b[sortBy]))
+    })
+  }, [products, search, sortBy])
+
+  const saveDraft = () => {
+    if (!draft.name || !draft.description || !draft.imageUrl || draft.price <= 0 || draft.stock < 0) return
+    addProduct(draft)
+    setDraft(emptyDraft)
+    setToast(t('productSaved'))
+    setTimeout(() => setToast(''), 1800)
+    setView('products')
+  }
+
+  const inventoryValue = products.reduce((acc, item) => acc + item.price * item.stock, 0)
+
+  if (!session) return <Navigate to="/admin" replace />
+
+  return (
+    <>
+      <AdminLayout active={view} onNavigate={setView}>
+        {view === 'products' && (
+          <div>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="input-field rounded-xl px-3 py-2.5"
+                placeholder={t('searchByNameCategory')}
+              />
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as 'name' | 'price' | 'category')}
+                className="input-field rounded-xl px-3 py-2.5"
+              >
+                <option value="name">{t('sortByName')}</option>
+                <option value="price">{t('sortByPrice')}</option>
+                <option value="category">{t('sortByCategory')}</option>
+              </select>
+              <button
+                type="button"
+                className="chip px-3 py-2 text-sm"
+                onClick={() => {
+                  const blob = new Blob([JSON.stringify(exportProducts(), null, 2)], { type: 'application/json' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = 'kurdi-products.json'
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                {t('exportJson')}
+              </button>
+              <label className="chip cursor-pointer px-3 py-2 text-sm">
+                {t('importJson')}
+                <input
+                  type="file"
+                  accept="application/json"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const text = await file.text()
+                    const parsed = JSON.parse(text) as Product[]
+                    if (Array.isArray(parsed)) importProducts(parsed)
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                className="chip px-3 py-2 text-sm"
+                onClick={() => downloadCsv('kurdi-products.csv', productsToCsv(products))}
+              >
+                {t('exportCsv')}
+              </button>
+              <label className="chip cursor-pointer px-3 py-2 text-sm">
+                {t('importCsv')}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    try {
+                      const text = await file.text()
+                      const updated = parseProductsCsv(text, products)
+                      importProducts(updated)
+                      setToast(t('csvImported'))
+                    } catch {
+                      setToast('CSV error')
+                    }
+                    setTimeout(() => setToast(''), 2000)
+                  }}
+                />
+              </label>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="text-text-muted">
+                  <tr>
+                    <th className="py-2">{t('image')}</th>
+                    <th>{t('name')}</th>
+                    <th>{t('category')}</th>
+                    <th>{t('price')}</th>
+                    <th>{t('stock')}</th>
+                    <th>{t('actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((product) => (
+                    <tr
+                      key={product.id}
+                      className="table-row-enter border-t border-border/60 transition-colors hover:bg-accent/5"
+                    >
+                      <td className="py-2">
+                        <img src={product.imageUrl} alt={product.name} className="h-10 w-16 rounded object-cover" />
+                      </td>
+                      <td>{product.name}</td>
+                      <td>{product.category}</td>
+                      <td>{formatPrice(product.price)}</td>
+                      <td>
+                        <span className={product.stock <= settingsDraft.lowStockThreshold ? 'font-semibold text-danger' : ''}>
+                          {product.stock}
+                          {product.stock <= settingsDraft.lowStockThreshold && product.stock > 0 && (
+                            <span className="ml-1 text-xs">({t('lowStockAlert')})</span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="space-x-2">
+                        <button type="button" className="button-pop text-accent" onClick={() => setEditing(product)}>
+                          {t('edit')}
+                        </button>
+                        <button type="button" className="button-pop text-brand-cyan" onClick={() => duplicateProduct(product.id)}>
+                          {t('duplicate')}
+                        </button>
+                        <button
+                          type="button"
+                          className="button-pop text-danger"
+                          onClick={() => window.confirm(t('confirmDelete')) && deleteProduct(product.id)}
+                        >
+                          {t('delete')}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {view === 'add' && (
+          <ProductForm
+            draft={draft}
+            setDraft={setDraft}
+            onSubmit={saveDraft}
+            submitLabel={t('saveProduct')}
+          />
+        )}
+
+        {view === 'analytics' && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="panel-elevated rounded-xl p-4">
+                <p className="text-sm text-text-muted">{t('totalProducts')}</p>
+                <p className="font-display text-2xl text-white">{products.length}</p>
+              </div>
+              <div className="panel-elevated rounded-xl p-4">
+                <p className="text-sm text-text-muted">{t('inventoryValue')}</p>
+                <p className="font-display text-2xl text-white">{formatPrice(inventoryValue)}</p>
+              </div>
+              <div className="panel-elevated rounded-xl p-4">
+                <p className="text-sm text-text-muted">{t('analyticsEvents')}</p>
+                <p className="font-display text-2xl text-white">{analyticsEvents.length}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-primary rounded-lg px-4 py-2 text-sm"
+                onClick={() => {
+                  const blob = new Blob([exportAnalyticsCsv()], { type: 'text/csv' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = 'kurdi-analytics.csv'
+                  a.click()
+                  URL.revokeObjectURL(url)
+                }}
+              >
+                {t('exportAnalytics')}
+              </button>
+              <button type="button" className="chip px-4 py-2 text-sm" onClick={clearAnalytics}>
+                {t('clearAnalytics')}
+              </button>
+            </div>
+            <div className="max-h-80 overflow-y-auto rounded-xl border border-border">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-border text-text-muted">
+                    <th className="p-2">{t('eventTime')}</th>
+                    <th className="p-2">{t('eventType')}</th>
+                    <th className="p-2">payload</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...analyticsEvents].reverse().slice(0, 100).map((evt) => (
+                    <tr key={evt.id} className="border-b border-border/40">
+                      <td className="p-2 whitespace-nowrap">{new Date(evt.at).toLocaleString()}</td>
+                      <td className="p-2">{evt.type}</td>
+                      <td className="p-2 text-text-muted">{JSON.stringify(evt.payload)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {view === 'settings' && (
+          <div className="space-y-3">
+            <input
+              value={settingsDraft.instagramHandle}
+              onChange={(event) =>
+                setSettingsDraft((prev) => ({ ...prev, instagramHandle: event.target.value }))
+              }
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder={t('instagramHandle')}
+            />
+            <input
+              value={settingsDraft.instagramUrl}
+              onChange={(event) => setSettingsDraft((prev) => ({ ...prev, instagramUrl: event.target.value }))}
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder={t('instagramProfileUrl')}
+            />
+            <div className="space-y-1">
+              <label className="text-sm text-text-muted">{t('googleMapsEmbedUrl')}</label>
+              <textarea
+                value={settingsDraft.googleMapsEmbedUrl}
+                onChange={(event) =>
+                  setSettingsDraft((prev) => ({ ...prev, googleMapsEmbedUrl: event.target.value }))
+                }
+                className="input-field min-h-24 w-full rounded-xl px-3 py-2.5"
+                placeholder="https://www.google.com/maps/place/... or https://www.google.com/maps/embed?pb=..."
+              />
+              <p className="text-xs text-text-muted">{t('googleMapsEmbedHint')}</p>
+            </div>
+            <input
+              value={settingsDraft.address}
+              onChange={(event) => setSettingsDraft((prev) => ({ ...prev, address: event.target.value }))}
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder={t('storeAddress')}
+            />
+            <input
+              value={settingsDraft.workingHours}
+              onChange={(event) =>
+                setSettingsDraft((prev) => ({ ...prev, workingHours: event.target.value }))
+              }
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder={t('workingHours')}
+            />
+            <input
+              value={settingsDraft.phone}
+              onChange={(event) => setSettingsDraft((prev) => ({ ...prev, phone: event.target.value }))}
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder={t('phoneNumber')}
+            />
+            <label className="text-sm text-text-muted">{t('lowStockThreshold')}</label>
+            <input
+              type="number"
+              min={0}
+              value={settingsDraft.lowStockThreshold}
+              onChange={(event) =>
+                setSettingsDraft((prev) => ({ ...prev, lowStockThreshold: Number(event.target.value) }))
+              }
+              className="input-field w-full rounded-xl px-3 py-2.5"
+            />
+            <label className="text-sm text-text-muted">{t('assemblyNote')}</label>
+            <input
+              value={settingsDraft.assemblyNote}
+              onChange={(event) =>
+                setSettingsDraft((prev) => ({ ...prev, assemblyNote: event.target.value }))
+              }
+              className="input-field w-full rounded-xl px-3 py-2.5"
+            />
+            <label className="text-sm text-text-muted">{t('backorderLeadDays')}</label>
+            <input
+              value={settingsDraft.backorderLeadDays}
+              onChange={(event) =>
+                setSettingsDraft((prev) => ({ ...prev, backorderLeadDays: event.target.value }))
+              }
+              className="input-field w-full rounded-xl px-3 py-2.5"
+              placeholder="2-3"
+            />
+
+            <div className="mt-6 rounded-xl border border-border p-4">
+              <p className="mb-3 font-semibold text-white">{t('buildTemplatesAdmin')}</p>
+              <input
+                value={tplName}
+                onChange={(e) => setTplName(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 text-sm"
+                placeholder={t('templateName')}
+              />
+              <input
+                value={tplDesc}
+                onChange={(e) => setTplDesc(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 text-sm"
+                placeholder={t('templateDesc')}
+              />
+              <textarea
+                value={tplParts}
+                onChange={(e) => setTplParts(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 font-mono text-xs"
+                rows={4}
+                placeholder="CPU: cpu-id"
+              />
+              <button
+                type="button"
+                className="btn-primary mb-3 rounded-lg px-3 py-1.5 text-sm"
+                onClick={() => {
+                  const parts: Partial<Record<Category, string>> = {}
+                  for (const line of tplParts.split('\n')) {
+                    const [slot, id] = line.split(':').map((s) => s.trim())
+                    if (slot && id) parts[slot as Category] = id
+                  }
+                  addTemplate({ name: tplName || 'Template', description: tplDesc, parts })
+                  setTplName('')
+                  setTplDesc('')
+                }}
+              >
+                {t('addTemplate')}
+              </button>
+              <ul className="max-h-32 space-y-1 overflow-y-auto text-sm">
+                {templates.map((tpl) => (
+                  <li key={tpl.id} className="flex justify-between gap-2 rounded bg-surface-2 px-2 py-1">
+                    <span>{tpl.name}</span>
+                    <button type="button" className="text-danger" onClick={() => removeTemplate(tpl.id)}>
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-border p-4">
+              <p className="mb-3 font-semibold text-white">{t('bundlesAdmin')}</p>
+              <input
+                value={bndName}
+                onChange={(e) => setBndName(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 text-sm"
+                placeholder={t('bundleName')}
+              />
+              <input
+                value={bndIds}
+                onChange={(e) => setBndIds(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 text-sm"
+                placeholder="cpu-id, mb-id, ram-id"
+              />
+              <input
+                value={bndLabel}
+                onChange={(e) => setBndLabel(e.target.value)}
+                className="input-field mb-2 w-full rounded-lg px-3 py-2 text-sm"
+                placeholder={t('bundleDiscount')}
+              />
+              <button
+                type="button"
+                className="btn-primary mb-3 rounded-lg px-3 py-1.5 text-sm"
+                onClick={() => {
+                  addBundle({
+                    name: bndName || 'Bundle',
+                    productIds: bndIds.split(',').map((s) => s.trim()).filter(Boolean),
+                    discountLabel: bndLabel || undefined,
+                  })
+                  setBndName('')
+                  setBndIds('')
+                  setBndLabel('')
+                }}
+              >
+                {t('addBundle')}
+              </button>
+              <ul className="max-h-32 space-y-1 overflow-y-auto text-sm">
+                {bundles.map((b) => (
+                  <li key={b.id} className="flex justify-between gap-2 rounded bg-surface-2 px-2 py-1">
+                    <span>{b.name}</span>
+                    <button type="button" className="text-danger" onClick={() => removeBundle(b.id)}>
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-sm text-text-muted">{t('instagramApiNote')}</p>
+            <button
+              type="button"
+              className="button-pop btn-primary rounded-xl px-4 py-2.5 font-semibold"
+              onClick={() => {
+                updateSettings(settingsDraft)
+                setToast(t('settingsSaved'))
+              }}
+            >
+              {t('saveSettings')}
+            </button>
+          </div>
+        )}
+      </AdminLayout>
+
+      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={t('editProduct')}>
+        {editing && (
+          <ProductForm
+            draft={editing}
+            setDraft={(next) => setEditing((current) => (current ? { ...current, ...next } : current))}
+            submitLabel={t('updateProduct')}
+            onSubmit={() => {
+              updateProduct(editing.id, {
+                name: editing.name,
+                description: editing.description,
+                price: editing.price,
+                previousPrice: editing.previousPrice,
+                category: editing.category,
+                imageUrl: editing.imageUrl,
+                imageUrls: editing.imageUrls,
+                specs: editing.specs,
+                stock: editing.stock,
+                sku: editing.sku,
+                staffPick: editing.staffPick,
+                discontinued: editing.discontinued,
+                allowBackorder: editing.allowBackorder,
+                staffNotes: editing.staffNotes,
+                instagramPostUrl: editing.instagramPostUrl,
+                seoTitle: editing.seoTitle,
+                seoDescription: editing.seoDescription,
+                useCaseTags: editing.useCaseTags,
+              })
+              setToast(t('productUpdated'))
+              setEditing(null)
+            }}
+          />
+        )}
+      </Modal>
+      {toast && (
+        <div className="fixed bottom-4 right-4 rounded-xl border border-success/40 bg-success px-4 py-2.5 font-semibold text-[#041210] shadow-glow animate-fade-up">
+          {toast}
+        </div>
+      )}
+    </>
+  )
+}
+
+interface ProductFormProps<T extends { specs: Record<string, string> }> {
+  draft: T
+  setDraft: (next: T) => void
+  onSubmit: () => void
+  submitLabel: string
+}
+
+function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
+  draft,
+  setDraft,
+  onSubmit,
+  submitLabel,
+}: ProductFormProps<T>) {
+  const { t } = useI18n()
+  const [specKey, setSpecKey] = useState<SpecKey>('socket')
+  const [specValue, setSpecValue] = useState(specValueOptionsByKey.socket[0])
+  const isPrebuiltCategory = draft.category === 'Prebuilt PC'
+  const activeSpecKeys = isPrebuiltCategory ? [...prebuiltSpecKeys] : [...compatibilitySpecKeys]
+  const safeSpecKey = activeSpecKeys.includes(specKey as never) ? specKey : activeSpecKeys[0]
+  const valueOptions = specValueOptionsByKey[safeSpecKey] ?? []
+  const safeSpecValue = valueOptions.includes(specValue) ? specValue : valueOptions[0]
+
+  const toBase64 = async (file: File) =>
+    new Promise<string>((resolve) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result))
+      reader.readAsDataURL(file)
+    })
+
+  return (
+    <div className="space-y-3">
+      <p className="rounded-md border border-accent/25 bg-accent/10 px-3 py-2 text-sm text-text-muted">
+        {t('productFormIntro')}
+      </p>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('productName')}</label>
+        <input
+          value={draft.name}
+          onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          placeholder={t('productName')}
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldCategory')}</label>
+        <DropdownSelect
+          options={categories}
+          value={categories.includes(draft.category) ? draft.category : categories[0]}
+          onChange={(value) => setDraft({ ...draft, category: value as Category })}
+        />
+        <p className="text-xs text-text-muted">{t('fieldCategoryHint')}</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-sm text-text-muted">{t('fieldPriceUsd')}</label>
+          <input
+            type="number"
+            value={draft.price}
+            onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })}
+            className="input-field w-full rounded-xl px-3 py-2.5"
+            placeholder={t('price')}
+            min={0}
+            step="0.01"
+          />
+          <p className="text-xs text-text-muted">{t('fieldPriceHint')}</p>
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm text-text-muted">{t('fieldStockQty')}</label>
+          <input
+            type="number"
+            value={draft.stock}
+            onChange={(event) => setDraft({ ...draft, stock: Number(event.target.value) })}
+            className="input-field w-full rounded-xl px-3 py-2.5"
+            placeholder={t('stock')}
+            min={0}
+            step="1"
+          />
+          <p className="text-xs text-text-muted">{t('fieldStockHint')}</p>
+        </div>
+      </div>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={Boolean(draft.staffPick)}
+          onChange={(event) => setDraft({ ...draft, staffPick: event.target.checked })}
+          className="accent-brand"
+        />
+        {t('staffPick')}
+      </label>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={Boolean((draft as unknown as Product).discontinued)}
+          onChange={(event) => setDraft({ ...draft, discontinued: event.target.checked } as T)}
+        />
+        {t('discontinued')}
+      </label>
+
+      <label className="flex cursor-pointer items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={Boolean((draft as unknown as Product).allowBackorder)}
+          onChange={(event) => setDraft({ ...draft, allowBackorder: event.target.checked } as T)}
+        />
+        {t('allowBackorder')}
+      </label>
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-sm text-text-muted">{t('fieldSku')}</label>
+          <input
+            value={(draft as unknown as Product).sku ?? ''}
+            onChange={(event) => setDraft({ ...draft, sku: event.target.value } as T)}
+            className="input-field w-full rounded-xl px-3 py-2.5"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm text-text-muted">{t('fieldPreviousPrice')}</label>
+          <input
+            type="number"
+            min={0}
+            value={(draft as unknown as Product).previousPrice ?? ''}
+            onChange={(event) =>
+              setDraft({
+                ...draft,
+                previousPrice: event.target.value ? Number(event.target.value) : undefined,
+              } as T)
+            }
+            className="input-field w-full rounded-xl px-3 py-2.5"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldInstagramPost')}</label>
+        <input
+          value={(draft as unknown as Product).instagramPostUrl ?? ''}
+          onChange={(event) => setDraft({ ...draft, instagramPostUrl: event.target.value } as T)}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          placeholder="https://www.instagram.com/p/..."
+        />
+      </div>
+
+      <div className="space-y-1 rounded-xl border border-dashed border-warning/40 bg-warning/5 p-3">
+        <label className="text-sm text-text-muted">{t('staffNotesInternal')}</label>
+        <textarea
+          value={(draft as unknown as Product).staffNotes ?? ''}
+          onChange={(event) => setDraft({ ...draft, staffNotes: event.target.value } as T)}
+          className="input-field w-full rounded-xl px-3 py-2.5 text-sm"
+          rows={2}
+        />
+        <p className="text-xs text-text-muted">{t('staffNotesHint')}</p>
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldSeoTitle')}</label>
+        <input
+          value={(draft as unknown as Product).seoTitle ?? ''}
+          onChange={(event) => setDraft({ ...draft, seoTitle: event.target.value } as T)}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldSeoDescription')}</label>
+        <textarea
+          value={(draft as unknown as Product).seoDescription ?? ''}
+          onChange={(event) => setDraft({ ...draft, seoDescription: event.target.value } as T)}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          rows={2}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldUseCaseTags')}</label>
+        <input
+          value={((draft as unknown as Product).useCaseTags ?? []).join(', ')}
+          onChange={(event) =>
+            setDraft({
+              ...draft,
+              useCaseTags: event.target.value.split(',').map((s) => s.trim()).filter(Boolean) as Product['useCaseTags'],
+            } as T)
+          }
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          placeholder="gaming, 1080p, office"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('description')}</label>
+        <textarea
+          value={draft.description}
+          onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          placeholder={t('description')}
+        />
+        <p className="text-xs text-text-muted">{t('fieldDescriptionHint')}</p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-sm text-text-muted">{t('fieldImage')}</p>
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-accent/40 bg-surface-2 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/10">
+          Browse Image
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              const imageUrl = await toBase64(file)
+              setDraft({ ...draft, imageUrl })
+            }}
+          />
+        </label>
+        <p className="text-xs text-text-muted">{t('fieldImageHint')}</p>
+      </div>
+
+      {draft.imageUrl && <p className="text-xs text-success">Image selected</p>}
+
+      <div className="space-y-1">
+        <label className="text-sm text-text-muted">{t('fieldExtraImages')}</label>
+        <label className="inline-flex cursor-pointer items-center rounded-md border border-accent/40 bg-surface-2 px-3 py-1.5 text-xs font-semibold text-accent">
+          {t('addGalleryImage')}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              const url = await toBase64(file)
+              const current = (draft as unknown as Product).imageUrls ?? []
+              setDraft({ ...draft, imageUrls: [...current, url] } as T)
+            }}
+          />
+        </label>
+        <textarea
+          value={((draft as unknown as Product).imageUrls ?? []).join('\n')}
+          onChange={(event) =>
+            setDraft({
+              ...draft,
+              imageUrls: event.target.value.split('\n').map((s) => s.trim()).filter(Boolean),
+            } as T)
+          }
+          className="input-field min-h-20 w-full rounded-xl px-3 py-2 font-mono text-xs"
+          placeholder="One image URL per line"
+        />
+      </div>
+      <div className="space-y-2 rounded-xl border border-border bg-surface-2/40 p-4">
+        <p className="text-sm text-white">{t('fieldSpecs')}</p>
+        <p className="text-sm text-text-muted">
+          {isPrebuiltCategory
+            ? 'Template spec keys: cpu, gpu, ram, storage, motherboard, psu, cooling, resolutionTarget, performanceTier, os'
+            : t('specsHint')}
+        </p>
+        <p className="text-xs text-text-muted">{t('fieldSpecsHint')}</p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="min-w-0 flex-1">
+            <DropdownSelect
+              options={activeSpecKeys}
+              value={safeSpecKey}
+              onChange={(value) => {
+                const nextKey = value as SpecKey
+                setSpecKey(nextKey)
+                setSpecValue(specValueOptionsByKey[nextKey][0])
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <DropdownSelect options={valueOptions} value={safeSpecValue} onChange={setSpecValue} />
+          </div>
+        </div>
+        <button
+          type="button"
+          className="rounded-md bg-surface-2 px-3 py-1.5"
+          onClick={() => {
+            if (!safeSpecValue) return
+            setDraft({ ...draft, specs: { ...draft.specs, [safeSpecKey]: safeSpecValue } })
+            setSpecValue(valueOptions[0])
+          }}
+        >
+          {t('addSpec')}
+        </button>
+        <p className="text-sm text-text-muted">{t('selectedSpecs')}</p>
+        <ul className="text-sm text-text-muted">
+          {Object.keys(draft.specs).length === 0 && <li>{t('noSpecsYet')}</li>}
+          {Object.entries(draft.specs).map(([key, value]) => (
+            <li key={key}>
+              {key} = {value}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p className="text-xs text-text-muted">{t('requiredFieldsNote')}</p>
+      <button
+        type="button"
+        onClick={onSubmit}
+        className="button-pop btn-primary rounded-xl px-4 py-2.5 font-semibold"
+      >
+        {submitLabel}
+      </button>
+    </div>
+  )
+}
+
+interface DropdownSelectProps {
+  options: string[]
+  value: string
+  onChange: (value: string) => void
+}
+
+function DropdownSelect({ options, value, onChange }: DropdownSelectProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div
+      className={`relative ${open ? 'z-[200]' : 'z-10'}`}
+      tabIndex={0}
+      onBlur={() => setTimeout(() => setOpen(false), 120)}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`input-field flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-text backdrop-blur-md ${
+          open ? 'border-brand/50 shadow-glow' : ''
+        }`}
+      >
+        <span className="truncate">{value}</span>
+        <ChevronDown size={16} className={`shrink-0 transition ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="dropdown-panel absolute left-0 right-0 top-full z-[210] mt-1 max-h-56 overflow-auto rounded-xl">
+          {options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+              className={`dropdown-panel-item ${option === value ? 'is-selected' : ''}`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
