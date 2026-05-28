@@ -98,6 +98,7 @@ export function PCBuilderPage() {
 
         <BuilderQuizTrigger onOpen={() => setOpenQuiz(true)} />
 
+        {(budgetPresets.length > 0 || adminTemplates.length > 0) && (
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand">{t('budgetPresets')}</p>
           <div className="space-y-2">
@@ -125,6 +126,7 @@ export function PCBuilderPage() {
             ))}
           </div>
         </div>
+        )}
 
         <div className="space-y-2">
           {slotsOrder.map((slot) => {

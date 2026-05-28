@@ -15,22 +15,36 @@ export interface StoreSettings {
 const STORAGE_KEY = 'kurdi_store_settings'
 
 export const defaultStoreSettings = (): StoreSettings => ({
-  instagramHandle: '',
-  instagramUrl: '',
-  googleMapsEmbedUrl: '',
-  address: '',
-  workingHours: '',
-  phone: '',
+  instagramHandle: 'kurdi.store.syria',
+  instagramUrl: 'https://www.instagram.com/kurdi.store.syria/',
+  googleMapsEmbedUrl: 'https://maps.app.goo.gl/Hbj8ChuBYshXxneh9',
+  address: 'Al Bahsa, Damascus, Syria',
+  workingHours: 'Sat - Thu: 10 AM - 8 PM',
+  phone: '0949624524',
   lowStockThreshold: 3,
   assemblyNote: '',
   backorderLeadDays: '2-3',
 })
 
+const isEmptyStoreProfile = (parsed: Partial<StoreSettings>) =>
+  !String(parsed.instagramHandle ?? '').trim() &&
+  !String(parsed.instagramUrl ?? '').trim() &&
+  !String(parsed.address ?? '').trim() &&
+  !String(parsed.workingHours ?? '').trim() &&
+  !String(parsed.phone ?? '').trim() &&
+  !String(parsed.googleMapsEmbedUrl ?? '').trim()
+
 const loadSettings = (): StoreSettings => {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return defaultStoreSettings()
   try {
-    return { ...defaultStoreSettings(), ...(JSON.parse(raw) as Partial<StoreSettings>) }
+    const parsed = JSON.parse(raw) as Partial<StoreSettings>
+    if (isEmptyStoreProfile(parsed)) {
+      const next = defaultStoreSettings()
+      persist(next)
+      return next
+    }
+    return { ...defaultStoreSettings(), ...parsed }
   } catch {
     return defaultStoreSettings()
   }

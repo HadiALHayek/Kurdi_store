@@ -37,16 +37,18 @@ export function BuilderQuiz({ open, onClose }: BuilderQuizProps) {
 
   const finish = (selectedUse: QuizUse, selectedBudget: QuizBudget) => {
     const presetId = resolveQuizPresetId(selectedUse, selectedBudget)
-    const ok = applyPreset(presetId, products)
     const preset = budgetPresets.find((p) => p.id === presetId)
+    if (!preset) {
+      trackEvent('builder_dropoff', { action: 'quiz_no_preset', use: selectedUse })
+      return
+    }
+    const ok = applyPreset(presetId, products)
     trackEvent('builder_dropoff', {
       action: 'quiz_complete',
       preset: presetId,
       use: selectedUse,
     })
-    if (ok && preset) {
-      close()
-    }
+    if (ok) close()
   }
 
   const handleUseSelect = (value: QuizUse) => {
@@ -117,6 +119,7 @@ export function BuilderQuiz({ open, onClose }: BuilderQuizProps) {
 
 export function BuilderQuizTrigger({ onOpen }: { onOpen: () => void }) {
   const { t } = useI18n()
+  if (budgetPresets.length === 0) return null
   return (
     <button
       type="button"
