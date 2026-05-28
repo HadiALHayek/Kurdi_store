@@ -86,8 +86,16 @@ const emptyDraft = {
 export function AdminDashboard() {
   const { t } = useI18n()
   const session = sessionStorage.getItem('kurdi_admin_session')
-  const { products, addProduct, updateProduct, deleteProduct, duplicateProduct, importProducts, exportProducts } =
-    useProductsStore()
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    duplicateProduct,
+    importProducts,
+    exportProducts,
+    clearAllProducts,
+  } = useProductsStore()
   const analyticsEvents = useAnalyticsStore((s) => s.events)
   const exportAnalyticsCsv = useAnalyticsStore((s) => s.exportCsv)
   const clearAnalytics = useAnalyticsStore((s) => s.clear)
@@ -99,6 +107,7 @@ export function AdminDashboard() {
   const [toast, setToast] = useState('')
   const settingsState = useSettingsStore((state) => state.settings)
   const updateSettings = useSettingsStore((state) => state.updateSettings)
+  const resetSettings = useSettingsStore((state) => state.resetSettings)
   const [settingsDraft, setSettingsDraft] = useState(settingsState)
   const templates = useBuildTemplatesStore((s) => s.templates)
   const addTemplate = useBuildTemplatesStore((s) => s.add)
@@ -215,6 +224,19 @@ export function AdminDashboard() {
                   }}
                 />
               </label>
+              <button
+                type="button"
+                className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-sm font-semibold text-danger hover:bg-danger/20"
+                onClick={() => {
+                  if (window.confirm(t('confirmClearAllProducts'))) {
+                    clearAllProducts()
+                    setToast(t('allProductsCleared'))
+                    setTimeout(() => setToast(''), 2000)
+                  }
+                }}
+              >
+                {t('clearAllProducts')}
+              </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -513,16 +535,33 @@ export function AdminDashboard() {
             </div>
 
             <p className="text-sm text-text-muted">{t('instagramApiNote')}</p>
-            <button
-              type="button"
-              className="button-pop btn-primary rounded-xl px-4 py-2.5 font-semibold"
-              onClick={() => {
-                updateSettings(settingsDraft)
-                setToast(t('settingsSaved'))
-              }}
-            >
-              {t('saveSettings')}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="button-pop btn-primary rounded-xl px-4 py-2.5 font-semibold"
+                onClick={() => {
+                  updateSettings(settingsDraft)
+                  setToast(t('settingsSaved'))
+                  setTimeout(() => setToast(''), 1800)
+                }}
+              >
+                {t('saveSettings')}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-danger/40 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger hover:bg-danger/20"
+                onClick={() => {
+                  if (window.confirm(t('confirmResetStoreSettings'))) {
+                    resetSettings()
+                    setSettingsDraft(useSettingsStore.getState().settings)
+                    setToast(t('settingsResetDone'))
+                    setTimeout(() => setToast(''), 2000)
+                  }
+                }}
+              >
+                {t('resetStoreSettings')}
+              </button>
+            </div>
           </div>
         )}
       </AdminLayout>

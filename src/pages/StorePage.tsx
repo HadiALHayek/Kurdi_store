@@ -18,7 +18,7 @@ import { useBuilderStore } from '../store/builderStore'
 
 import { useProductsStore } from '../store/productsStore'
 
-import { useSettingsStore } from '../store/settingsStore'
+import { hasInstagramInfo, hasStoreLocationInfo, useSettingsStore } from '../store/settingsStore'
 
 import type { Category } from '../types'
 
@@ -796,135 +796,86 @@ export function StorePage() {
 
 
 
-      <section className="section-enter stagger-2 mt-10 grid gap-6 lg:grid-cols-2">
-
-        <article className="glass-card rounded-2xl p-6 shadow-glow">
-
-          <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
-
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand shadow-glow">
-
-              <AtSign size={20} />
-
-            </span>
-
-            <h3 className="font-display text-xl font-semibold text-white">{t('instagramFeed')}</h3>
-
-          </div>
-
-          <InstagramFeed handle={settings.instagramHandle} profileUrl={settings.instagramUrl} />
-
-        </article>
-
-
-
-        <article className="glass-card rounded-2xl p-6 shadow-glow">
-
-          <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
-
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand-cyan shadow-glow-cyan">
-
-              <MapPin size={20} />
-
-            </span>
-
-            <h3 className="font-display text-xl font-semibold text-white">{t('storeLocation')}</h3>
-
-          </div>
-
-          {mapEmbedUrl ? (
-
-            <div className="space-y-3">
-
-              <iframe
-
-                title={t('storeLocation')}
-
-                src={mapEmbedUrl}
-
-                className="h-[220px] w-full rounded-lg border border-brand/40 sm:h-[300px]"
-
-                loading="lazy"
-
-                referrerPolicy="no-referrer-when-downgrade"
-
-                allowFullScreen
-
-              />
-
-              <a
-
-                href={mapOpenUrl}
-
-                target="_blank"
-
-                rel="noreferrer"
-
-                className="button-pop btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
-
-              >
-
-                <MapPin size={16} />
-
-                {t('openInGoogleMaps')}
-
-              </a>
-
-            </div>
-
-          ) : (
-
-            <div className="grid h-[220px] place-content-center rounded-lg border border-brand/30 bg-surface-2/70 p-4 text-center sm:h-[300px]">
-
-              <p className="mb-2 text-sm text-text-muted">{t('mapPlaceholder')}</p>
-
-              <p className="font-mono text-xs text-brand">{t('coordinatesPlaceholder')}</p>
-
-              {settings.address && (
-
-                <a
-
-                  href={mapOpenUrl}
-
-                  target="_blank"
-
-                  rel="noreferrer"
-
-                  className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand"
-
-                >
-
-                  <MapPin size={14} />
-
-                  {t('openInGoogleMaps')}
-
-                </a>
-
-              )}
-
-            </div>
-
+      {(hasInstagramInfo(settings) || hasStoreLocationInfo(settings)) && (
+        <section
+          className={`section-enter stagger-2 mt-10 grid gap-6 ${
+            hasInstagramInfo(settings) && hasStoreLocationInfo(settings) ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
+          }`}
+        >
+          {hasInstagramInfo(settings) && (
+            <article className="glass-card rounded-2xl p-6 shadow-glow">
+              <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand shadow-glow">
+                  <AtSign size={20} />
+                </span>
+                <h3 className="font-display text-xl font-semibold text-white">{t('instagramFeed')}</h3>
+              </div>
+              <InstagramFeed handle={settings.instagramHandle} profileUrl={settings.instagramUrl} />
+            </article>
           )}
 
-          <div className="mt-4 space-y-2 text-sm text-text-muted">
+          {hasStoreLocationInfo(settings) && (
+            <article className="glass-card rounded-2xl p-6 shadow-glow">
+              <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand-cyan shadow-glow-cyan">
+                  <MapPin size={20} />
+                </span>
+                <h3 className="font-display text-xl font-semibold text-white">{t('storeLocation')}</h3>
+              </div>
 
-            <p className="text-white">{settings.address}</p>
+              {mapEmbedUrl ? (
+                <div className="space-y-3">
+                  <iframe
+                    title={t('storeLocation')}
+                    src={mapEmbedUrl}
+                    className="h-[220px] w-full rounded-lg border border-brand/40 sm:h-[300px]"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allowFullScreen
+                  />
+                  {mapOpenUrl && (
+                    <a
+                      href={mapOpenUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="button-pop btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                    >
+                      <MapPin size={16} />
+                      {t('openInGoogleMaps')}
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="grid min-h-[120px] place-content-center rounded-lg border border-brand/30 bg-surface-2/70 p-4 text-center">
+                  <p className="text-sm text-text-muted">{t('mapPlaceholder')}</p>
+                  {settings.address.trim() && mapOpenUrl && (
+                    <a
+                      href={mapOpenUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand"
+                    >
+                      <MapPin size={14} />
+                      {t('openInGoogleMaps')}
+                    </a>
+                  )}
+                </div>
+              )}
 
-            <p>{settings.workingHours}</p>
-
-            <p className="inline-flex items-center gap-2">
-
-              <Phone size={14} />
-
-              {settings.phone}
-
-            </p>
-
-          </div>
-
-        </article>
-
-      </section>
+              <div className="mt-4 space-y-2 text-sm text-text-muted">
+                {settings.address.trim() && <p className="text-white">{settings.address}</p>}
+                {settings.workingHours.trim() && <p>{settings.workingHours}</p>}
+                {settings.phone.trim() && (
+                  <p className="inline-flex items-center gap-2">
+                    <Phone size={14} />
+                    {settings.phone}
+                  </p>
+                )}
+              </div>
+            </article>
+          )}
+        </section>
+      )}
 
     </div>
 

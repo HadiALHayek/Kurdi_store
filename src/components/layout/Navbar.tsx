@@ -1,4 +1,4 @@
-import { Menu, X } from 'lucide-react'
+import { Lock, Menu, X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
 import { useI18n } from '../../i18n'
@@ -51,6 +51,15 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              to="/admin"
+              onClick={() => setMenuOpen(false)}
+              className="btn-ghost button-pop hidden items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-text-muted hover:text-brand-light sm:inline-flex"
+              title={t('navAdmin')}
+            >
+              <Lock size={14} />
+              <span>{t('navAdmin')}</span>
+            </Link>
             <button
               type="button"
               onClick={() => setLang(lang === 'en' ? 'ar' : 'en')}
@@ -87,6 +96,14 @@ export function Navbar() {
                 {label}
               </NavLink>
             ))}
+            <Link
+              to="/admin"
+              onClick={() => setMenuOpen(false)}
+              className="inline-flex items-center gap-2 rounded-lg bg-surface-2/80 px-3 py-2.5 text-sm font-medium text-text-muted hover:text-brand-light"
+            >
+              <Lock size={16} />
+              {t('navAdmin')}
+            </Link>
           </div>
         )}
       </nav>

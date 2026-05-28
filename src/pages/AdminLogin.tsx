@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '../i18n'
 
 const ADMIN_PASSWORD = 'admin123'
@@ -55,6 +55,9 @@ export function AdminLogin() {
         <button type="submit" className="button-pop btn-primary w-full rounded-xl py-3 font-semibold">
           {t('login')}
         </button>
+        <Link to="/" className="block text-center text-sm text-text-muted hover:text-brand-cyan">
+          ← {t('backToStore')}
+        </Link>
       </form>
     </main>
   )
