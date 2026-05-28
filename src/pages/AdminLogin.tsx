@@ -1,24 +1,75 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useI18n } from '../i18n'
-
-const ADMIN_PASSWORD = 'admin123'
+import {
+  adminLogin,
+  formatLockoutMinutes,
+  getLockoutStatus,
+  isAdminSessionValid,
+} from '../utils/adminAuth'
 
 export function AdminLogin() {
   const { t, lang, setLang } = useI18n()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [lockoutRemainingMs, setLockoutRemainingMs] = useState(0)
   const navigate = useNavigate()
 
-  const handleSubmit = (event: React.FormEvent) => {
+  useEffect(() => {
+    if (isAdminSessionValid()) {
+      navigate('/admin/dashboard', { replace: true })
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    const tick = () => {
+      const status = getLockoutStatus()
+      setLockoutRemainingMs(status.locked ? status.remainingMs : 0)
+    }
+    tick()
+    const id = window.setInterval(tick, 1000)
+    return () => window.clearInterval(id)
+  }, [error])
+
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem('kurdi_admin_session', '1')
-      navigate('/admin/dashboard')
+    setError('')
+
+    const lockout = getLockoutStatus()
+    if (lockout.locked) {
+      setError(
+        t('loginLockedHint').replace('{minutes}', String(formatLockoutMinutes(lockout.remainingMs))),
+      )
       return
     }
-    setError(t('invalidPassword'))
+
+    setLoading(true)
+    try {
+      const result = await adminLogin(password)
+      if (result.ok) {
+        navigate('/admin/dashboard')
+        return
+      }
+      if (result.error === 'locked') {
+        setError(
+          t('loginLockedHint').replace('{minutes}', String(formatLockoutMinutes(getLockoutStatus().remainingMs))),
+        )
+      } else {
+        const status = getLockoutStatus()
+        setError(
+          status.attemptsLeft > 0
+            ? `${t('invalidPassword')} (${status.attemptsLeft} ${t('attemptsRemaining')})`
+            : t('invalidPassword'),
+        )
+      }
+    } finally {
+      setLoading(false)
+      setPassword('')
+    }
   }
+
+  const locked = lockoutRemainingMs > 0
 
   return (
     <main className="page-enter grid min-h-[85vh] place-content-center px-4">
@@ -47,14 +98,27 @@ export function AdminLogin() {
             onChange={(event) => setPassword(event.target.value)}
             placeholder={t('enterAdminPassword')}
             className="w-full bg-transparent outline-none"
+            autoComplete="current-password"
+            disabled={locked || loading}
+            required
           />
         </div>
-        {error && (
+        {locked && (
+          <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+            {t('loginLockedHint').replace('{minutes}', String(formatLockoutMinutes(lockoutRemainingMs)))}
+          </p>
+        )}
+        {error && !locked && (
           <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>
         )}
-        <button type="submit" className="button-pop btn-primary w-full rounded-xl py-3 font-semibold">
-          {t('login')}
+        <button
+          type="submit"
+          disabled={locked || loading}
+          className="button-pop btn-primary w-full rounded-xl py-3 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {loading ? '…' : t('login')}
         </button>
+        <p className="text-center text-xs text-text-muted">{t('adminSecurityNote')}</p>
         <Link to="/" className="block text-center text-sm text-text-muted hover:text-brand-cyan">
           ← {t('backToStore')}
         </Link>

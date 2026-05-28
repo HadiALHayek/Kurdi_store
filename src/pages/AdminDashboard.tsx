@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
+import { AdminChangePassword } from '../components/admin/AdminChangePassword'
 import { AdminLayout } from '../components/layout/AdminLayout'
+import { isAdminSessionValid } from '../utils/adminAuth'
 import { Modal } from '../components/ui/Modal'
 import { useI18n } from '../i18n'
 import { useAnalyticsStore } from '../store/analyticsStore'
@@ -85,7 +87,13 @@ const emptyDraft = {
 
 export function AdminDashboard() {
   const { t } = useI18n()
-  const session = sessionStorage.getItem('kurdi_admin_session')
+  const [authReady, setAuthReady] = useState(false)
+  const [authed, setAuthed] = useState(false)
+
+  useEffect(() => {
+    setAuthed(isAdminSessionValid())
+    setAuthReady(true)
+  }, [])
   const {
     products,
     addProduct,
@@ -143,7 +151,8 @@ export function AdminDashboard() {
 
   const inventoryValue = products.reduce((acc, item) => acc + item.price * item.stock, 0)
 
-  if (!session) return <Navigate to="/admin" replace />
+  if (!authReady) return null
+  if (!authed) return <Navigate to="/admin" replace />
 
   return (
     <>
@@ -363,6 +372,13 @@ export function AdminDashboard() {
 
         {view === 'settings' && (
           <div className="space-y-3">
+            <AdminChangePassword
+              onSuccess={(message) => {
+                setToast(message)
+                setTimeout(() => setToast(''), 2200)
+              }}
+            />
+
             <input
               value={settingsDraft.instagramHandle}
               onChange={(event) =>

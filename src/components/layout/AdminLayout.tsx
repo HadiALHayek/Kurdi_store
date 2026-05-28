@@ -1,5 +1,8 @@
 import { type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { LogOut } from 'lucide-react'
 import { useI18n } from '../../i18n'
+import { adminLogout } from '../../utils/adminAuth'
 
 interface AdminLayoutProps {
   active: 'products' | 'add' | 'analytics' | 'settings'
@@ -9,6 +12,7 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ active, onNavigate, children }: AdminLayoutProps) {
   const { t, lang, setLang } = useI18n()
+  const navigate = useNavigate()
 
   const items: Array<{ key: 'products' | 'add' | 'analytics' | 'settings'; label: string }> = [
     { key: 'products', label: t('products') },
@@ -46,6 +50,17 @@ export function AdminLayout({ active, onNavigate, children }: AdminLayoutProps) 
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            adminLogout()
+            navigate('/admin', { replace: true })
+          }}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/20 md:mt-6"
+        >
+          <LogOut size={16} />
+          {t('logout')}
+        </button>
       </aside>
       <section className="glass-card min-w-0 rounded-2xl p-5 md:p-7">{children}</section>
     </div>
