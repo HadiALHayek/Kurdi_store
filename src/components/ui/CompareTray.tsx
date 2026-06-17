@@ -6,6 +6,7 @@ import { useCompareStore } from '../../store/compareStore'
 import { useProductsStore } from '../../store/productsStore'
 import { useState } from 'react'
 import { trackEvent } from '../../store/analyticsStore'
+import { formatSpecDisplay, getSpecKeys } from '../../utils/productSpecs'
 
 export function CompareTray() {
   const { t } = useI18n()
@@ -21,11 +22,11 @@ export function CompareTray() {
   const compared = products.filter((p) => ids.includes(p.id))
   if (ids.length === 0) return null
 
-  const specKeys = Array.from(new Set(compared.flatMap((p) => Object.keys(p.specs)))).slice(0, 16)
+  const specKeys = Array.from(new Set(compared.flatMap((p) => getSpecKeys(p.specs)))).slice(0, 16)
 
   const visibleSpecKeys = diffOnly
     ? specKeys.filter((key) => {
-        const values = compared.map((p) => p.specs[key] ?? '—')
+        const values = compared.map((p) => formatSpecDisplay(p.specs, key) || '—')
         return new Set(values).size > 1
       })
     : specKeys
@@ -99,14 +100,14 @@ export function CompareTray() {
                 })}
               </tr>
               {visibleSpecKeys.map((key) => {
-                const values = compared.map((p) => p.specs[key] ?? '—')
+                const values = compared.map((p) => formatSpecDisplay(p.specs, key) || '—')
                 const isDiff = new Set(values).size > 1
                 return (
                   <tr key={key} className={`border-b border-border/40 ${isDiff ? 'bg-brand/10' : ''}`}>
                     <td className="p-2 capitalize text-text-muted">{key}</td>
                     {compared.map((p) => (
                       <td key={p.id} className={`p-2 ${isDiff ? 'font-medium text-white' : 'text-text'}`}>
-                        {p.specs[key] ?? '—'}
+                        {formatSpecDisplay(p.specs, key) || '—'}
                       </td>
                     ))}
                   </tr>

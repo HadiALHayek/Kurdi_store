@@ -2,11 +2,12 @@ import { useMemo } from 'react'
 import { useI18n } from '../../i18n'
 import { useBuilderStore } from '../../store/builderStore'
 import { getWattageBreakdown } from '../../utils/wattageBreakdown'
+import { getNumericSpecMax } from '../../utils/productSpecs'
 
 export function WattageBreakdown() {
   const { t } = useI18n()
   const build = useBuilderStore((s) => s.build)
-  const psuWatts = Number.parseInt(build.PSU?.specs.wattage ?? '0', 10) || 0
+  const psuWatts = getNumericSpecMax(build.PSU?.specs ?? {}, 'wattage')
 
   const { segments, required, psuWatts: psu, headroom } = useMemo(
     () => getWattageBreakdown(build, psuWatts),

@@ -7,7 +7,6 @@ interface ProductFiltersProps {
   category: Category | 'All'
   filters: StoreFiltersState
   options: { sockets: string[]; memoryTypes: string[]; formFactors: string[] }
-  hasBuildParts: boolean
   onChange: (next: StoreFiltersState) => void
   getCount?: (apply: (base: StoreFiltersState) => StoreFiltersState) => number
 }
@@ -31,7 +30,6 @@ export function ProductFilters({
   category,
   filters,
   options,
-  hasBuildParts,
   onChange,
   getCount,
 }: ProductFiltersProps) {
@@ -78,18 +76,6 @@ export function ProductFilters({
         />
         {t('inStockOnly')}
       </label>
-
-      {hasBuildParts && (
-        <label className="flex cursor-pointer items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={filters.hideIncompatible}
-            onChange={(e) => onChange({ ...filters, hideIncompatible: e.target.checked })}
-            className="accent-brand"
-          />
-          {t('hideIncompatible')}
-        </label>
-      )}
 
       {showSocket && options.sockets.length > 0 && (
         <div>

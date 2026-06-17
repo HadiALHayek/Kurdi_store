@@ -8,7 +8,8 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const navItems = [
-    ['/', t('navStore')],
+    ['/', t('navHome')],
+    ['/products', t('navProducts')],
     ['/guides', t('navGuides')],
     ['/builder', t('navBuilder')],
   ] as const

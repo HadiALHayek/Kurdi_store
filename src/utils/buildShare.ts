@@ -1,44 +1,30 @@
-import type { Category, Product } from '../types'
+import type { BuildMap, Product } from '../types'
+import { BUILDER_SLOTS_ORDER, slotAcceptsProduct } from './builderSlots'
 
-const slotsOrder: Category[] = [
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
-
-export function encodeBuildToParam(build: Partial<Record<Category, Product>>): string {
-  const ids = slotsOrder.map((slot) => build[slot]?.id ?? '').join('.')
+export function encodeBuildToParam(build: BuildMap): string {
+  const ids = BUILDER_SLOTS_ORDER.map((slot) => build[slot]?.id ?? '').join('.')
   return ids.replace(/^\.+|\.+$/g, '') || ''
 }
 
-export function decodeBuildFromParam(
-  param: string,
-  products: Product[],
-): Partial<Record<Category, Product>> {
+export function decodeBuildFromParam(param: string, products: Product[]): BuildMap {
   if (!param.trim()) return {}
   const ids = param.split('.').filter(Boolean)
-  const result: Partial<Record<Category, Product>> = {}
-  let slotIndex = 0
+  const result: BuildMap = {}
   for (const id of ids) {
     const product = products.find((p) => p.id === id)
     if (!product) continue
-    while (slotIndex < slotsOrder.length && slotsOrder[slotIndex] !== product.category) {
-      slotIndex++
-    }
-    if (slotIndex < slotsOrder.length) {
-      result[product.category] = product
-      slotIndex++
+    for (const slot of BUILDER_SLOTS_ORDER) {
+      if (result[slot]) continue
+      if (slotAcceptsProduct(slot, product)) {
+        result[slot] = product
+        break
+      }
     }
   }
   return result
 }
 
-export function buildShareUrl(build: Partial<Record<Category, Product>>): string {
+export function buildShareUrl(build: BuildMap): string {
   const encoded = encodeBuildToParam(build)
   if (!encoded) return `${window.location.origin}/builder`
   return `${window.location.origin}/builder?build=${encodeURIComponent(encoded)}`

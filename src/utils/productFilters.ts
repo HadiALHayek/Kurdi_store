@@ -1,6 +1,7 @@
 import type { Category, Product, UseCaseTag } from '../types'
 import { getIncompatibilityReason } from '../data/compatibilityRules'
 import type { IncompatReasonKey } from '../data/compatibilityRules'
+import { collectSpecValuesAcrossProducts, getNumericSpecMax, getSpecValues, hasSpecKey, productMatchesSpecFilter } from './productSpecs'
 import { productMatchesUseCaseFilter } from './useCaseTags'
 
 export interface StoreFiltersState {
@@ -30,20 +31,10 @@ export const defaultStoreFilters = (): StoreFiltersState => ({
 })
 
 export function collectFilterOptions(products: Product[]) {
-  const sockets = new Set<string>()
-  const memoryTypes = new Set<string>()
-  const formFactors = new Set<string>()
-
-  for (const product of products) {
-    if (product.specs.socket) sockets.add(product.specs.socket)
-    if (product.specs.memoryType) memoryTypes.add(product.specs.memoryType)
-    if (product.specs.formFactor) formFactors.add(product.specs.formFactor)
-  }
-
   return {
-    sockets: [...sockets].sort(),
-    memoryTypes: [...memoryTypes].sort(),
-    formFactors: [...formFactors].sort(),
+    sockets: collectSpecValuesAcrossProducts(products, 'socket'),
+    memoryTypes: collectSpecValuesAcrossProducts(products, 'memoryType'),
+    formFactors: collectSpecValuesAcrossProducts(products, 'formFactor'),
   }
 }
 
@@ -67,32 +58,22 @@ export function matchesStoreFilters(
   if (!Number.isNaN(minPrice) && product.price < minPrice) return false
   if (!Number.isNaN(maxPrice) && product.price > maxPrice) return false
 
-  if (filters.sockets.length > 0 && product.specs.socket && !filters.sockets.includes(product.specs.socket)) {
-    return false
-  }
-  if (
-    filters.memoryTypes.length > 0 &&
-    product.specs.memoryType &&
-    !filters.memoryTypes.includes(product.specs.memoryType)
-  ) {
-    return false
-  }
-  if (
-    filters.formFactors.length > 0 &&
-    product.specs.formFactor &&
-    !filters.formFactors.includes(product.specs.formFactor)
-  ) {
-    return false
-  }
+  if (!productMatchesSpecFilter(product.specs, 'socket', filters.sockets)) return false
+  if (!productMatchesSpecFilter(product.specs, 'memoryType', filters.memoryTypes)) return false
+  if (!productMatchesSpecFilter(product.specs, 'formFactor', filters.formFactors)) return false
 
   const minWattage = filters.minWattage ? Number.parseInt(filters.minWattage, 10) : NaN
-  if (!Number.isNaN(minWattage) && product.specs.wattage) {
-    if (Number.parseInt(product.specs.wattage, 10) < minWattage) return false
+  if (!Number.isNaN(minWattage) && hasSpecKey(product.specs, 'wattage')) {
+    if (getNumericSpecMax(product.specs, 'wattage') < minWattage) return false
   }
 
   const minVram = filters.minVram ? Number.parseInt(filters.minVram, 10) : NaN
-  if (!Number.isNaN(minVram) && product.specs.vram) {
-    if (parseVramGb(product.specs.vram) < minVram) return false
+  if (!Number.isNaN(minVram)) {
+    const maxVram = Math.max(
+      0,
+      ...getSpecValues(product.specs, 'vram').map((v) => parseVramGb(v)),
+    )
+    if (maxVram > 0 && maxVram < minVram) return false
   }
 
   const hasBuildParts = Object.keys(build).length > 0

@@ -15,7 +15,7 @@ export function StartBuildCTA({ onStartPrebuilt }: StartBuildCTAProps) {
       onStartPrebuilt()
       return
     }
-    navigate({ pathname: '/', search: '?category=Prebuilt+PC', hash: 'store-catalog' })
+    navigate({ pathname: '/products', search: '?category=Prebuilt+PC', hash: 'store-catalog' })
   }
 
   return (

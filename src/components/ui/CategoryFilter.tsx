@@ -1,22 +1,13 @@
 import type { Category } from '../../types'
 import { useI18n } from '../../i18n'
+import { ALL_STORE_FILTER_CATEGORIES } from '../../utils/adminDepartmentSpecs'
 
-const categories: Array<Category | 'All'> = [
-  'All',
-  'Prebuilt PC',
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
+const defaultCategories: Array<Category | 'All'> = ['All', ...ALL_STORE_FILTER_CATEGORIES]
 
 interface CategoryFilterProps {
   value: Category | 'All'
   onChange: (value: Category | 'All') => void
+  categories?: Array<Category | 'All'>
   vertical?: boolean
   responsive?: boolean
 }
@@ -24,6 +15,7 @@ interface CategoryFilterProps {
 export function CategoryFilter({
   value,
   onChange,
+  categories = defaultCategories,
   vertical = false,
   responsive = false,
 }: CategoryFilterProps) {

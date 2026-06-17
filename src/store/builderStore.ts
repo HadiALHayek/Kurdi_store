@@ -1,8 +1,15 @@
 import { create } from 'zustand'
-import type { Category, Product } from '../types'
+import { getNumericSpecMax } from '../utils/productSpecs'
+import type { BuildMap, BuilderSlotId, Product } from '../types'
 import { budgetPresets } from '../data/budgetPresets'
 import type { BuildTemplate } from '../types'
-import { getNextEmptyUnlockedSlot } from '../utils/builderSlots'
+import {
+  BUILDER_SLOTS_ORDER,
+  getNextEmptySlot,
+  getSelectedBuildTotal,
+  normalizeBuildMap,
+  slotAcceptsProduct,
+} from '../utils/builderSlots'
 
 const TEMPLATES_KEY = 'kurdi_build_templates_v1'
 
@@ -18,19 +25,7 @@ const loadTemplates = (): BuildTemplate[] => {
 const STORAGE_KEY = 'kurdi_builder_v1'
 const HISTORY_KEY = 'kurdi_builder_history_v1'
 
-const slotsOrder: Category[] = [
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
-
-type BuildMap = Partial<Record<Category, Product>>
-type HistoryMap = Partial<Record<Category, Product[]>>
+type HistoryMap = Partial<Record<BuilderSlotId, Product[]>>
 
 const loadBuild = (): BuildMap => {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -52,76 +47,73 @@ const loadHistory = (): HistoryMap => {
   }
 }
 
-const persist = (build: BuildMap) => localStorage.setItem(STORAGE_KEY, JSON.stringify(build))
+const persist = (build: BuildMap) =>
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeBuildMap(build)))
 const persistHistory = (history: HistoryMap) => localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
 
-const getRequiredForUnlock = (category: Category): Category[] => {
-  if (category === 'Motherboard') return ['CPU']
-  if (category === 'RAM') return ['CPU', 'Motherboard']
-  if (['GPU', 'Storage', 'PSU', 'Case', 'Cooling'].includes(category)) {
-    return ['CPU', 'Motherboard', 'RAM']
-  }
-  return []
-}
-
-const pushHistory = (history: HistoryMap, category: Category, previous: Product | undefined): HistoryMap => {
+const pushHistory = (
+  history: HistoryMap,
+  slot: BuilderSlotId,
+  previous: Product | undefined,
+): HistoryMap => {
   if (!previous) return history
-  const list = history[category] ?? []
+  const list = history[slot] ?? []
   if (list[0]?.id === previous.id) return history
   const next = [previous, ...list.filter((p) => p.id !== previous.id)].slice(0, 3)
-  return { ...history, [category]: next }
+  return { ...history, [slot]: next }
 }
 
 interface BuilderState {
-  slotsOrder: Category[]
-  activeCategory: Category
+  slotsOrder: BuilderSlotId[]
+  activeCategory: BuilderSlotId
   build: BuildMap
   partHistory: HistoryMap
   showAllParts: boolean
-  setActiveCategory: (category: Category) => void
+  setActiveCategory: (slot: BuilderSlotId) => void
   setShowAllParts: (value: boolean) => void
-  selectPart: (category: Category, product: Product) => void
-  restoreFromHistory: (category: Category, product: Product) => void
-  removePart: (category: Category) => void
+  selectPart: (slot: BuilderSlotId, product: Product) => void
+  restoreFromHistory: (slot: BuilderSlotId, product: Product) => void
+  removePart: (slot: BuilderSlotId) => void
   resetBuild: () => void
   loadBuild: (next: BuildMap) => void
   applyPreset: (presetId: string, products: Product[]) => boolean
   applyTemplate: (templateId: string, products: Product[]) => boolean
-  isUnlocked: (category: Category) => boolean
   selectedCount: () => number
   totalPrice: () => number
   totalRequiredWattage: () => number
-  isComplete: () => boolean
+  hasSelection: () => boolean
 }
 
 export const useBuilderStore = create<BuilderState>((set, get) => ({
-  slotsOrder,
+  slotsOrder: BUILDER_SLOTS_ORDER,
   activeCategory: 'CPU',
   build: loadBuild(),
   partHistory: loadHistory(),
   showAllParts: false,
-  setActiveCategory: (category) => set({ activeCategory: category }),
+  setActiveCategory: (slot) => set({ activeCategory: slot }),
   setShowAllParts: (value) => set({ showAllParts: value }),
-  selectPart: (category, product) =>
+  selectPart: (slot, product) =>
     set((state) => {
-      const previous = state.build[category]
-      const nextHistory = pushHistory(state.partHistory, category, previous)
+      if (!slotAcceptsProduct(slot, product)) return state
+      const previous = state.build[slot]
+      const nextHistory = pushHistory(state.partHistory, slot, previous)
       persistHistory(nextHistory)
-      const nextBuild = { ...state.build, [category]: product }
+      const nextBuild = { ...state.build, [slot]: product }
       persist(nextBuild)
-      const nextSlot = getNextEmptyUnlockedSlot(nextBuild)
+      const nextSlot = getNextEmptySlot(nextBuild)
       return {
         build: nextBuild,
         partHistory: nextHistory,
-        activeCategory: nextSlot ?? category,
+        activeCategory: nextSlot ?? slot,
       }
     }),
-  restoreFromHistory: (category, product) => {
-    get().selectPart(category, product)
+  restoreFromHistory: (slot, product) => {
+    get().selectPart(slot, product)
   },
-  removePart: (category) =>
+  removePart: (slot) =>
     set((state) => {
-      const nextBuild = { ...state.build, [category]: undefined }
+      const nextBuild = normalizeBuildMap(state.build)
+      delete nextBuild[slot]
       persist(nextBuild)
       return { build: nextBuild }
     }),
@@ -131,8 +123,9 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     set({ build: {}, partHistory: {}, activeCategory: 'CPU' })
   },
   loadBuild: (next) => {
-    persist(next)
-    set({ build: next })
+    const normalized = normalizeBuildMap(next)
+    persist(normalized)
+    set({ build: normalized })
   },
   applyPreset: (presetId, products) => {
     const preset = budgetPresets.find((p) => p.id === presetId)
@@ -140,10 +133,10 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const nextBuild: BuildMap = {}
     for (const [slot, productId] of Object.entries(preset.parts)) {
       const product = products.find((p) => p.id === productId)
-      if (product) nextBuild[slot as Category] = product
+      if (product) nextBuild[slot as BuilderSlotId] = product
     }
     persist(nextBuild)
-    set({ build: nextBuild, activeCategory: getNextEmptyUnlockedSlot(nextBuild) ?? 'CPU' })
+    set({ build: nextBuild, activeCategory: getNextEmptySlot(nextBuild) ?? 'CPU' })
     return true
   },
   applyTemplate: (templateId, products) => {
@@ -152,24 +145,24 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
     const nextBuild: BuildMap = {}
     for (const [slot, productId] of Object.entries(template.parts)) {
       const product = products.find((p) => p.id === productId)
-      if (product) nextBuild[slot as Category] = product
+      if (product) nextBuild[slot as BuilderSlotId] = product
     }
     persist(nextBuild)
-    set({ build: nextBuild, activeCategory: getNextEmptyUnlockedSlot(nextBuild) ?? 'CPU' })
+    set({ build: nextBuild, activeCategory: getNextEmptySlot(nextBuild) ?? 'CPU' })
     return true
   },
-  isUnlocked: (category) => getRequiredForUnlock(category).every((needed) => Boolean(get().build[needed])),
-  selectedCount: () => get().slotsOrder.filter((slot) => Boolean(get().build[slot])).length,
-  totalPrice: () =>
-    get()
-      .slotsOrder.map((slot) => get().build[slot]?.price ?? 0)
-      .reduce((acc, value) => acc + value, 0),
+  selectedCount: () => getSelectedCount(get().build),
+  totalPrice: () => getSelectedBuildTotal(get().build),
   totalRequiredWattage: () => {
     const cpu = get().build.CPU
     const gpu = get().build.GPU
-    const cpuTdp = Number.parseInt(cpu?.specs.tdp ?? '0', 10) || 0
-    const gpuTdp = Number.parseInt(gpu?.specs.tdp ?? '0', 10) || 0
+    const cpuTdp = getNumericSpecMax(cpu?.specs ?? {}, 'tdp')
+    const gpuTdp = getNumericSpecMax(gpu?.specs ?? {}, 'tdp')
     return cpuTdp + gpuTdp + 100
   },
-  isComplete: () => get().slotsOrder.every((slot) => Boolean(get().build[slot])),
+  hasSelection: () => getSelectedCount(get().build) > 0,
 }))
+
+function getSelectedCount(build: BuildMap): number {
+  return BUILDER_SLOTS_ORDER.filter((slot) => Boolean(build[slot])).length
+}

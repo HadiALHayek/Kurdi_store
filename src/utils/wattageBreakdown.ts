@@ -1,6 +1,5 @@
 import type { Category, Product } from '../types'
-
-const toNumber = (value?: string) => Number.parseInt(value ?? '0', 10) || 0
+import { getNumericSpecMax } from './productSpecs'
 
 export interface WattageSegment {
   key: 'cpu' | 'gpu' | 'overhead' | 'headroom'
@@ -10,8 +9,8 @@ export interface WattageSegment {
 }
 
 export function getWattageBreakdown(build: Partial<Record<Category, Product>>, psuWatts: number) {
-  const cpu = toNumber(build.CPU?.specs.tdp)
-  const gpu = toNumber(build.GPU?.specs.tdp)
+  const cpu = getNumericSpecMax(build.CPU?.specs ?? {}, 'tdp')
+  const gpu = getNumericSpecMax(build.GPU?.specs ?? {}, 'tdp')
   const overhead = 100
   const required = cpu + gpu + overhead
   const headroom = Math.max(0, psuWatts - required)

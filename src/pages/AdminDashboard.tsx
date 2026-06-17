@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
+import { AdminBulkCsv } from '../components/admin/AdminBulkCsv'
 import { AdminChangePassword } from '../components/admin/AdminChangePassword'
+import { AdminCustomers } from '../components/admin/AdminCustomers'
+import { PrebuiltSpecsEditor } from '../components/admin/PrebuiltSpecsEditor'
 import { AdminLayout } from '../components/layout/AdminLayout'
 import { isAdminSessionValid } from '../utils/adminAuth'
 import { Modal } from '../components/ui/Modal'
@@ -11,57 +14,41 @@ import { useBundlesStore } from '../store/bundlesStore'
 import { useBuildTemplatesStore } from '../store/buildTemplatesStore'
 import { useProductsStore } from '../store/productsStore'
 import { useSettingsStore } from '../store/settingsStore'
-import type { Category, Product } from '../types'
+import type { Category, Product, ShopDepartment } from '../types'
 import { formatPrice } from '../utils/compatibility'
 import { downloadCsv, parseProductsCsv, productsToCsv } from '../utils/productCsv'
+import { compressImageFile } from '../utils/imageUpload'
+import { addSpecValue, getSpecKeys, getSpecValues, removeSpecValue } from '../utils/productSpecs'
+import {
+  categoriesForDepartment,
+  defaultCategoryForDepartment,
+  getAdminSpecConfig,
+  inferDepartmentFromProduct,
+} from '../utils/adminDepartmentSpecs'
+import { SHOP_DEPARTMENTS } from '../utils/shopDepartments'
 
-type View = 'products' | 'add' | 'analytics' | 'settings'
+type View = 'products' | 'add' | 'analytics' | 'customers' | 'settings'
 
-const categories: Category[] = [
-  'Prebuilt PC',
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
-const compatibilitySpecKeys = ['socket', 'tdp', 'memoryType', 'wattage', 'formFactor', 'tdpSupport'] as const
-const prebuiltSpecKeys = [
-  'cpu',
-  'gpu',
-  'ram',
-  'storage',
-  'motherboard',
-  'psu',
-  'cooling',
-  'resolutionTarget',
-  'performanceTier',
-  'os',
-] as const
-type CompatibilitySpecKey = (typeof compatibilitySpecKeys)[number]
-type PrebuiltSpecKey = (typeof prebuiltSpecKeys)[number]
-type SpecKey = CompatibilitySpecKey | PrebuiltSpecKey
+const DEPT_LABEL_KEY: Record<
+  ShopDepartment,
+  'deptPrebuilt' | 'deptPcParts' | 'deptMonitors' | 'deptLaptops' | 'deptAccessories'
+> = {
+  prebuilt: 'deptPrebuilt',
+  'pc-parts': 'deptPcParts',
+  monitors: 'deptMonitors',
+  laptops: 'deptLaptops',
+  accessories: 'deptAccessories',
+}
 
-const specValueOptionsByKey: Record<SpecKey, string[]> = {
-  socket: ['AM4', 'AM5', 'LGA1700', 'LGA1851'],
-  tdp: ['65', '95', '105', '120', '125', '165', '170', '200', '220', '253', '300'],
-  memoryType: ['DDR4', 'DDR5'],
-  wattage: ['450', '550', '650', '750', '850', '1000', '1200'],
-  formFactor: ['ATX', 'mATX', 'ITX'],
-  tdpSupport: ['95', '125', '170', '180', '220', '250', '280', '300'],
-  cpu: ['Ryzen 5 7600', 'Ryzen 7 9700X', 'Ryzen 7 9800X3D', 'Core i7-14700K', 'Core Ultra 7 265KF'],
-  gpu: ['RTX 4060 8GB', 'RTX 4070 12GB', 'RTX 5070 12GB', 'RTX 5080 16GB', 'RX 7600 8GB', 'RX 7900 XTX 24GB'],
-  ram: ['16GB DDR5', '32GB DDR5', '64GB DDR5'],
-  storage: ['1TB NVMe', '2TB NVMe', '1TB NVMe + 2TB HDD'],
-  motherboard: ['B650 mATX', 'B760 ATX', 'X870 ATX', 'Z890 ATX'],
-  psu: ['650W Gold', '750W Gold', '850W Gold', '1000W Gold', '1200W Platinum'],
-  cooling: ['Tower Air Cooler', 'Dual Tower Air Cooler', '240mm AIO', '360mm AIO'],
-  resolutionTarget: ['1080p', '1440p', '4K'],
-  performanceTier: ['Entry', 'Mainstream', 'High-End', 'Extreme'],
-  os: ['Windows 11 Home', 'Windows 11 Pro', 'No OS'],
+const DEPT_SPECS_HINT_KEY: Record<
+  ShopDepartment,
+  'specsHintPrebuilt' | 'specsHintPcParts' | 'specsHintMonitors' | 'specsHintLaptops' | 'specsHintAccessories'
+> = {
+  prebuilt: 'specsHintPrebuilt',
+  'pc-parts': 'specsHintPcParts',
+  monitors: 'specsHintMonitors',
+  laptops: 'specsHintLaptops',
+  accessories: 'specsHintAccessories',
 }
 
 const emptyDraft = {
@@ -70,6 +57,7 @@ const emptyDraft = {
   price: 0,
   previousPrice: undefined as number | undefined,
   category: 'CPU' as Category,
+  department: 'pc-parts' as ShopDepartment,
   imageUrl: '',
   imageUrls: [] as string[],
   stock: 0,
@@ -223,9 +211,14 @@ export function AdminDashboard() {
                     if (!file) return
                     try {
                       const text = await file.text()
-                      const updated = parseProductsCsv(text, products)
-                      importProducts(updated)
-                      setToast(t('csvImported'))
+                      const result = parseProductsCsv(text, products, 'merge')
+                      importProducts(result.products)
+                      setToast(
+                        t('csvImportSummary')
+                          .replace('{created}', String(result.created))
+                          .replace('{updated}', String(result.updated))
+                          .replace('{skipped}', String(result.skipped)),
+                      )
                     } catch {
                       setToast('CSV error')
                     }
@@ -280,7 +273,16 @@ export function AdminDashboard() {
                         </span>
                       </td>
                       <td className="space-x-2">
-                        <button type="button" className="button-pop text-accent" onClick={() => setEditing(product)}>
+                        <button
+                          type="button"
+                          className="button-pop text-accent"
+                          onClick={() =>
+                            setEditing({
+                              ...product,
+                              department: inferDepartmentFromProduct(product),
+                            })
+                          }
+                        >
                           {t('edit')}
                         </button>
                         <button type="button" className="button-pop text-brand-cyan" onClick={() => duplicateProduct(product.id)}>
@@ -303,11 +305,26 @@ export function AdminDashboard() {
         )}
 
         {view === 'add' && (
-          <ProductForm
-            draft={draft}
-            setDraft={setDraft}
-            onSubmit={saveDraft}
-            submitLabel={t('saveProduct')}
+          <div className="space-y-6">
+            <AdminBulkCsv onToast={(message) => {
+              setToast(message)
+              setTimeout(() => setToast(''), 2800)
+            }} />
+            <ProductForm
+              draft={draft}
+              setDraft={setDraft}
+              onSubmit={saveDraft}
+              submitLabel={t('saveProduct')}
+            />
+          </div>
+        )}
+
+        {view === 'customers' && (
+          <AdminCustomers
+            onToast={(message) => {
+              setToast(message)
+              setTimeout(() => setToast(''), 2200)
+            }}
           />
         )}
 
@@ -588,6 +605,7 @@ export function AdminDashboard() {
             draft={editing}
             setDraft={(next) => setEditing((current) => (current ? { ...current, ...next } : current))}
             submitLabel={t('updateProduct')}
+            excludeProductId={editing.id}
             onSubmit={() => {
               updateProduct(editing.id, {
                 name: editing.name,
@@ -595,6 +613,7 @@ export function AdminDashboard() {
                 price: editing.price,
                 previousPrice: editing.previousPrice,
                 category: editing.category,
+                department: editing.department,
                 imageUrl: editing.imageUrl,
                 imageUrls: editing.imageUrls,
                 specs: editing.specs,
@@ -624,11 +643,26 @@ export function AdminDashboard() {
   )
 }
 
-interface ProductFormProps<T extends { specs: Record<string, string> }> {
+interface ProductFormProps<T extends { specs: Product['specs'] }> {
   draft: T
   setDraft: (next: T) => void
   onSubmit: () => void
   submitLabel: string
+  excludeProductId?: string
+}
+
+function FormFieldLabel({ children, required }: { children: ReactNode; required?: boolean }) {
+  const { t } = useI18n()
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-sm text-text-muted">
+      {children}
+      {required && (
+        <span className="rounded-md border border-danger/35 bg-danger/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-danger">
+          {t('required')}
+        </span>
+      )}
+    </span>
+  )
 }
 
 function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
@@ -636,22 +670,41 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
   setDraft,
   onSubmit,
   submitLabel,
+  excludeProductId,
 }: ProductFormProps<T>) {
   const { t } = useI18n()
-  const [specKey, setSpecKey] = useState<SpecKey>('socket')
-  const [specValue, setSpecValue] = useState(specValueOptionsByKey.socket[0])
-  const isPrebuiltCategory = draft.category === 'Prebuilt PC'
-  const activeSpecKeys = isPrebuiltCategory ? [...prebuiltSpecKeys] : [...compatibilitySpecKeys]
-  const safeSpecKey = activeSpecKeys.includes(specKey as never) ? specKey : activeSpecKeys[0]
-  const valueOptions = specValueOptionsByKey[safeSpecKey] ?? []
-  const safeSpecValue = valueOptions.includes(specValue) ? specValue : valueOptions[0]
+  const storeProducts = useProductsStore((state) => state.products)
+  const department = draft.department ?? 'pc-parts'
+  const departmentCategories = categoriesForDepartment(department)
+  const safeCategory = departmentCategories.includes(draft.category)
+    ? draft.category
+    : departmentCategories[0]
+  const specConfig = getAdminSpecConfig(department, safeCategory)
+  const [specKey, setSpecKey] = useState(specConfig.specKeys[0] ?? 'socket')
+  const [specValue, setSpecValue] = useState(specConfig.valueOptionsByKey[specKey]?.[0] ?? '')
+  const activeSpecKeys = [...specConfig.specKeys]
+  const safeSpecKey = activeSpecKeys.includes(specKey) ? specKey : activeSpecKeys[0]
+  const valueOptions = specConfig.valueOptionsByKey[safeSpecKey] ?? []
+  const safeSpecValue = valueOptions.includes(specValue) ? specValue : valueOptions[0] ?? ''
 
-  const toBase64 = async (file: File) =>
-    new Promise<string>((resolve) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result))
-      reader.readAsDataURL(file)
-    })
+  const changeDepartment = (nextDepartment: ShopDepartment) => {
+    const nextCategory = defaultCategoryForDepartment(nextDepartment)
+    const nextConfig = getAdminSpecConfig(nextDepartment, nextCategory)
+    const nextKey = nextConfig.specKeys[0] ?? ''
+    setDraft({ ...draft, department: nextDepartment, category: nextCategory, specs: {} })
+    setSpecKey(nextKey)
+    setSpecValue(nextConfig.valueOptionsByKey[nextKey]?.[0] ?? '')
+  }
+
+  const changeCategory = (nextCategory: Category) => {
+    const nextConfig = getAdminSpecConfig(department, nextCategory)
+    const nextKey = nextConfig.specKeys[0] ?? ''
+    setDraft({ ...draft, category: nextCategory })
+    setSpecKey(nextKey)
+    setSpecValue(nextConfig.valueOptionsByKey[nextKey]?.[0] ?? '')
+  }
+
+  const toBase64 = async (file: File) => compressImageFile(file)
 
   return (
     <div className="space-y-3">
@@ -660,41 +713,70 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
       </p>
 
       <div className="space-y-1">
-        <label className="text-sm text-text-muted">{t('productName')}</label>
+        <label className="block">
+          <FormFieldLabel required>{t('productName')}</FormFieldLabel>
+        </label>
         <input
           value={draft.name}
           onChange={(event) => setDraft({ ...draft, name: event.target.value })}
           className="input-field w-full rounded-xl px-3 py-2.5"
           placeholder={t('productName')}
+          required
         />
       </div>
 
       <div className="space-y-1">
-        <label className="text-sm text-text-muted">{t('fieldCategory')}</label>
+        <label className="block">
+          <FormFieldLabel required>{t('fieldDepartment')}</FormFieldLabel>
+        </label>
+        <select
+          value={department}
+          onChange={(event) => changeDepartment(event.target.value as ShopDepartment)}
+          className="input-field w-full rounded-xl px-3 py-2.5"
+          required
+        >
+          {SHOP_DEPARTMENTS.map((dept) => (
+            <option key={dept} value={dept}>
+              {t(DEPT_LABEL_KEY[dept])}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-text-muted">{t('fieldDepartmentAddHint')}</p>
+      </div>
+
+      <div className="space-y-1">
+        <label className="block">
+          <FormFieldLabel required>{t('fieldCategory')}</FormFieldLabel>
+        </label>
         <DropdownSelect
-          options={categories}
-          value={categories.includes(draft.category) ? draft.category : categories[0]}
-          onChange={(value) => setDraft({ ...draft, category: value as Category })}
+          options={departmentCategories}
+          value={safeCategory}
+          onChange={(value) => changeCategory(value as Category)}
         />
         <p className="text-xs text-text-muted">{t('fieldCategoryHint')}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
-          <label className="text-sm text-text-muted">{t('fieldPriceUsd')}</label>
+          <label className="block">
+            <FormFieldLabel required>{t('fieldPriceUsd')}</FormFieldLabel>
+          </label>
           <input
             type="number"
             value={draft.price}
             onChange={(event) => setDraft({ ...draft, price: Number(event.target.value) })}
             className="input-field w-full rounded-xl px-3 py-2.5"
             placeholder={t('price')}
-            min={0}
+            min={0.01}
             step="0.01"
+            required
           />
           <p className="text-xs text-text-muted">{t('fieldPriceHint')}</p>
         </div>
         <div className="space-y-1">
-          <label className="text-sm text-text-muted">{t('fieldStockQty')}</label>
+          <label className="block">
+            <FormFieldLabel required>{t('fieldStockQty')}</FormFieldLabel>
+          </label>
           <input
             type="number"
             value={draft.stock}
@@ -703,6 +785,7 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
             placeholder={t('stock')}
             min={0}
             step="1"
+            required
           />
           <p className="text-xs text-text-muted">{t('fieldStockHint')}</p>
         </div>
@@ -816,18 +899,21 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
       </div>
 
       <div className="space-y-1">
-        <label className="text-sm text-text-muted">{t('description')}</label>
+        <label className="block">
+          <FormFieldLabel required>{t('description')}</FormFieldLabel>
+        </label>
         <textarea
           value={draft.description}
           onChange={(event) => setDraft({ ...draft, description: event.target.value })}
           className="input-field w-full rounded-xl px-3 py-2.5"
           placeholder={t('description')}
+          required
         />
         <p className="text-xs text-text-muted">{t('fieldDescriptionHint')}</p>
       </div>
 
       <div className="space-y-1">
-        <p className="text-sm text-text-muted">{t('fieldImage')}</p>
+        <FormFieldLabel required>{t('fieldImage')}</FormFieldLabel>
         <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-accent/40 bg-surface-2 px-4 py-2 text-sm font-semibold text-accent transition hover:bg-accent/10">
           Browse Image
           <input
@@ -845,7 +931,11 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
         <p className="text-xs text-text-muted">{t('fieldImageHint')}</p>
       </div>
 
-      {draft.imageUrl && <p className="text-xs text-success">Image selected</p>}
+      {draft.imageUrl ? (
+        <p className="text-xs text-success">{t('imageSelected')}</p>
+      ) : (
+        <p className="text-xs text-danger/90">{t('imageRequiredHint')}</p>
+      )}
 
       <div className="space-y-1">
         <label className="text-sm text-text-muted">{t('fieldExtraImages')}</label>
@@ -877,51 +967,74 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
         />
       </div>
       <div className="space-y-2 rounded-xl border border-border bg-surface-2/40 p-4">
-        <p className="text-sm text-white">{t('fieldSpecs')}</p>
-        <p className="text-sm text-text-muted">
-          {isPrebuiltCategory
-            ? 'Template spec keys: cpu, gpu, ram, storage, motherboard, psu, cooling, resolutionTarget, performanceTier, os'
-            : t('specsHint')}
-        </p>
+        <FormFieldLabel required>
+          <span className="text-sm text-white">{t('fieldSpecs')}</span>
+        </FormFieldLabel>
+        <p className="text-sm text-text-muted">{t(DEPT_SPECS_HINT_KEY[department])}</p>
         <p className="text-xs text-text-muted">{t('fieldSpecsHint')}</p>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="min-w-0 flex-1">
-            <DropdownSelect
-              options={activeSpecKeys}
-              value={safeSpecKey}
-              onChange={(value) => {
-                const nextKey = value as SpecKey
-                setSpecKey(nextKey)
-                setSpecValue(specValueOptionsByKey[nextKey][0])
+        {department === 'prebuilt' ? (
+          <PrebuiltSpecsEditor
+            specs={draft.specs}
+            onChange={(specs) => setDraft({ ...draft, specs })}
+            storeProducts={storeProducts}
+            excludeProductId={excludeProductId}
+          />
+        ) : (
+          <>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="min-w-0 flex-1">
+                <DropdownSelect
+                  options={activeSpecKeys}
+                  value={safeSpecKey}
+                  onChange={(value) => {
+                    const nextKey = value
+                    setSpecKey(nextKey)
+                    setSpecValue(specConfig.valueOptionsByKey[nextKey]?.[0] ?? '')
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DropdownSelect options={valueOptions} value={safeSpecValue} onChange={setSpecValue} />
+              </div>
+            </div>
+            <button
+              type="button"
+              className="rounded-md bg-surface-2 px-3 py-1.5"
+              onClick={() => {
+                if (!safeSpecValue) return
+                setDraft({ ...draft, specs: addSpecValue(draft.specs, safeSpecKey, safeSpecValue) })
+                setSpecValue(valueOptions[0])
               }}
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <DropdownSelect options={valueOptions} value={safeSpecValue} onChange={setSpecValue} />
-          </div>
-        </div>
-        <button
-          type="button"
-          className="rounded-md bg-surface-2 px-3 py-1.5"
-          onClick={() => {
-            if (!safeSpecValue) return
-            setDraft({ ...draft, specs: { ...draft.specs, [safeSpecKey]: safeSpecValue } })
-            setSpecValue(valueOptions[0])
-          }}
-        >
-          {t('addSpec')}
-        </button>
-        <p className="text-sm text-text-muted">{t('selectedSpecs')}</p>
-        <ul className="text-sm text-text-muted">
-          {Object.keys(draft.specs).length === 0 && <li>{t('noSpecsYet')}</li>}
-          {Object.entries(draft.specs).map(([key, value]) => (
-            <li key={key}>
-              {key} = {value}
-            </li>
-          ))}
-        </ul>
+            >
+              {t('addSpec')}
+            </button>
+            <p className="text-sm text-text-muted">{t('selectedSpecs')}</p>
+            <ul className="space-y-1 text-sm text-text-muted">
+              {getSpecKeys(draft.specs).length === 0 && <li>{t('noSpecsYet')}</li>}
+              {getSpecKeys(draft.specs).flatMap((key) =>
+                getSpecValues(draft.specs, key).map((value) => (
+                  <li
+                    key={`${key}-${value}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-surface-2/50 px-2 py-1"
+                  >
+                    <span>
+                      <span className="font-medium text-text">{key}</span> = {value}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-danger hover:underline"
+                      onClick={() => setDraft({ ...draft, specs: removeSpecValue(draft.specs, key, value) })}
+                    >
+                      ×
+                    </button>
+                  </li>
+                )),
+              )}
+            </ul>
+          </>
+        )}
       </div>
-      <p className="text-xs text-text-muted">{t('requiredFieldsNote')}</p>
+      <p className="text-xs text-text-muted">{t('requiredFieldsLegend')}</p>
       <button
         type="button"
         onClick={onSubmit}

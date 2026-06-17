@@ -1,11 +1,10 @@
-import { AtSign, GitCompare, MapPin, Phone, Search } from 'lucide-react'
+import { GitCompare, Search } from 'lucide-react'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { MobileFilterDrawer } from '../components/store/MobileFilterDrawer'
-import { PickupInfoBar } from '../components/store/PickupInfoBar'
 import { ProductFilters } from '../components/store/ProductFilters'
 import { PrebuiltCarousel } from '../components/store/PrebuiltCarousel'
 import { RecentlyViewedStrip } from '../components/store/RecentlyViewedStrip'
@@ -18,20 +17,17 @@ import { useBuilderStore } from '../store/builderStore'
 
 import { useProductsStore } from '../store/productsStore'
 
-import { hasInstagramInfo, hasStoreLocationInfo, useSettingsStore } from '../store/settingsStore'
-
-import type { Category } from '../types'
+import type { Category, ShopDepartment } from '../types'
 
 import { CategoryFilter } from '../components/ui/CategoryFilter'
-
-import { InstagramFeed } from '../components/ui/InstagramFeed'
-
 import { ProductCard } from '../components/ui/ProductCard'
 
 import { useI18n } from '../i18n'
 
 import { countProductsForFilterValue } from '../utils/filterCounts'
-import { normalizeGoogleMapsEmbedUrl, toGoogleMapsOpenUrl } from '../utils/maps'
+import { isStorefrontProduct } from '../utils/productCsv'
+import { filterProductsByDepartment, isShopDepartment } from '../utils/shopDepartments'
+import { getStoreCategoryFilterOptions, isBuilderCategory } from '../utils/adminDepartmentSpecs'
 
 import {
 
@@ -39,8 +35,6 @@ import {
 
   collectFilterOptions,
   defaultStoreFilters,
-  getProductCompatState,
-
   hasActiveStoreFilters,
 
   matchesStoreFilters,
@@ -57,36 +51,12 @@ import {
 import { describeActiveFilters } from '../utils/zeroResultsHints'
 import { productMatchesSearchQuery } from '../utils/productSearch'
 import { isProductPurchasable } from '../utils/stockStatus'
+import { getBuilderSlotForCategory } from '../utils/builderSlots'
 
 
 
-const categoryOptions: Array<Category | 'All'> = [
-
-  'All',
-
-  'Prebuilt PC',
-
-  'CPU',
-
-  'Motherboard',
-
-  'RAM',
-
-  'GPU',
-
-  'Storage',
-
-  'PSU',
-
-  'Case',
-
-  'Cooling',
-
-]
-
-const sortOptions: SortOption[] = [
+const storeSortOptions: SortOption[] = [
   'recommended',
-  'compatible-first',
   'in-stock',
   'price-asc',
   'price-desc',
@@ -94,10 +64,15 @@ const sortOptions: SortOption[] = [
   'name-asc',
 ]
 
-function parseCategoryFromParams(params: URLSearchParams): Category | 'All' {
+const emptyBuild = {}
+
+function parseCategoryFromParams(
+  params: URLSearchParams,
+  options: Array<Category | 'All'>,
+): Category | 'All' {
   const fromQuery = params.get('category')
   if (!fromQuery) return 'All'
-  return categoryOptions.includes(fromQuery as Category | 'All') ? (fromQuery as Category | 'All') : 'All'
+  return options.includes(fromQuery as Category | 'All') ? (fromQuery as Category | 'All') : 'All'
 }
 
 export function StorePage() {
@@ -108,16 +83,31 @@ export function StorePage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const products = useProductsStore((state) => state.products)
+  const allProducts = useProductsStore((state) => state.products)
+  const products = useMemo(() => allProducts.filter(isStorefrontProduct), [allProducts])
 
-  const settings = useSettingsStore((state) => state.settings)
+  const department = useMemo((): ShopDepartment | null => {
+    const value = searchParams.get('department')
+    return isShopDepartment(value) ? value : null
+  }, [searchParams])
 
-  const build = useBuilderStore((state) => state.build)
+  const catalogProducts = useMemo(
+    () => filterProductsByDepartment(products, department),
+    [products, department],
+  )
+
+  const categoryFilterOptions = useMemo(
+    () => getStoreCategoryFilterOptions(department),
+    [department],
+  )
 
   const selectPart = useBuilderStore((state) => state.selectPart)
   const setCompareIds = useCompareStore((s) => s.setIds)
 
-  const category = useMemo(() => parseCategoryFromParams(searchParams), [searchParams])
+  const category = useMemo(
+    () => parseCategoryFromParams(searchParams, categoryFilterOptions),
+    [searchParams, categoryFilterOptions],
+  )
 
   const setCategoryFilter = useCallback(
     (value: Category | 'All') => {
@@ -140,7 +130,7 @@ export function StorePage() {
 
     const fromQuery = searchParams.get('sort') as SortOption | null
 
-    return fromQuery && sortOptions.includes(fromQuery) ? fromQuery : 'recommended'
+    return fromQuery && storeSortOptions.includes(fromQuery) ? fromQuery : 'recommended'
 
   })
 
@@ -150,7 +140,7 @@ export function StorePage() {
     setSearch('')
     setSortBy('recommended')
     setFilters(defaultStoreFilters())
-    navigate({ pathname: '/', search: '?category=Prebuilt+PC', hash: 'store-catalog' })
+    navigate({ pathname: '/products', search: '?category=Prebuilt+PC', hash: 'store-catalog' })
   }, [navigate])
 
   useEffect(() => {
@@ -163,39 +153,19 @@ export function StorePage() {
 
   const prebuiltProducts = useMemo(
 
-    () => products.filter((product) => product.category === 'Prebuilt PC'),
+    () => catalogProducts.filter((product) => product.category === 'Prebuilt PC'),
 
-    [products],
+    [catalogProducts],
 
   )
 
-  const filterOptions = useMemo(() => collectFilterOptions(products), [products])
-
-  const hasBuildParts = Object.keys(build).length > 0
+  const filterOptions = useMemo(() => collectFilterOptions(catalogProducts), [catalogProducts])
 
   const getFilterCount = useCallback(
     (apply: (base: StoreFiltersState) => StoreFiltersState) =>
-      countProductsForFilterValue(products, category, search, filters, build, apply),
-    [products, category, search, filters, build],
+      countProductsForFilterValue(catalogProducts, category, search, filters, emptyBuild, apply),
+    [catalogProducts, category, search, filters],
   )
-
-  const mapEmbedUrl = useMemo(
-
-    () => normalizeGoogleMapsEmbedUrl(settings.googleMapsEmbedUrl, settings.address),
-
-    [settings.googleMapsEmbedUrl, settings.address],
-
-  )
-
-  const mapOpenUrl = useMemo(
-
-    () => toGoogleMapsOpenUrl(settings.googleMapsEmbedUrl, settings.address),
-
-    [settings.googleMapsEmbedUrl, settings.address],
-
-  )
-
-
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
@@ -210,45 +180,26 @@ export function StorePage() {
     }
   }, [search, sortBy, filters, searchParams, setSearchParams])
 
-
-
   const filtered = useMemo(() => {
-
-    const matchingProducts = products.filter((product) => {
-
+    const matchingProducts = catalogProducts.filter((product) => {
       const byCategory = category === 'All' || product.category === category
-
       const bySearch = productMatchesSearchQuery(product, search)
-
       if (!byCategory || !bySearch) return false
-
-      return matchesStoreFilters(product, filters, build)
-
+      return matchesStoreFilters(product, filters, emptyBuild)
     })
-
-    return sortProducts(matchingProducts, sortBy, build)
-
-  }, [products, category, search, sortBy, filters, build])
+    return sortProducts(matchingProducts, sortBy, emptyBuild)
+  }, [catalogProducts, category, search, sortBy, filters])
 
   const relaxedCount = useMemo(() => {
-
     if (filtered.length > 0) return null
-
     const withoutStock = { ...filters, inStockOnly: false }
-
-    const count = products.filter((product) => {
-
+    const count = catalogProducts.filter((product) => {
       const byCategory = category === 'All' || product.category === category
-
       const bySearch = productMatchesSearchQuery(product, search)
-
-      return byCategory && bySearch && matchesStoreFilters(product, withoutStock, build)
-
+      return byCategory && bySearch && matchesStoreFilters(product, withoutStock, emptyBuild)
     }).length
-
     return count > 0 ? count : null
-
-  }, [filtered.length, products, category, search, filters, build])
+  }, [filtered.length, catalogProducts, category, search, filters])
 
 
 
@@ -273,27 +224,21 @@ export function StorePage() {
 
     <div className="page-enter mx-auto w-full max-w-7xl px-4 py-4 pb-28 sm:py-6 md:px-8">
 
-      <section className="hero-panel section-enter mb-6 rounded-2xl p-6 sm:p-8 md:p-10">
-
-        <div className="relative z-[1] flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
-
-          <img src="/kurdi-logo.png" alt="Kurdi Store" className="logo-glow h-12 w-auto sm:h-14" />
-
-          <div>
-
-            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-cyan">PC Components</p>
-
-            <h1 className="text-gradient-brand font-display text-3xl font-bold sm:text-4xl md:text-5xl">Kurdi Store</h1>
-
-            <p className="mt-2 max-w-xl text-base text-text-muted">{t('brandTagline')}</p>
-
-          </div>
-
+      <section className="hero-panel section-enter mb-6 rounded-2xl p-6 sm:p-8">
+        <div className="relative z-[1]">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-cyan">{t('navProducts')}</p>
+          <h1 className="text-gradient-brand font-display text-3xl font-bold sm:text-4xl">{t('productsPageTitle')}</h1>
+          <p className="mt-2 max-w-xl text-base text-text-muted">
+            {department === 'prebuilt' && t('deptPrebuiltDesc')}
+            {department === 'pc-parts' && t('deptPcPartsDesc')}
+            {department === 'monitors' && t('deptMonitorsDesc')}
+            {department === 'laptops' && t('deptLaptopsDesc')}
+            {department === 'accessories' && t('deptAccessoriesDesc')}
+            {!department && t('productsPageDesc')}
+          </p>
         </div>
-
       </section>
 
-      <PickupInfoBar />
       <div className="relative z-10">
         <StartBuildCTA onStartPrebuilt={startPrebuilt} />
       </div>
@@ -304,7 +249,12 @@ export function StorePage() {
 
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand">{t('category')}</p>
 
-          <CategoryFilter value={category} onChange={setCategoryFilter} responsive />
+          <CategoryFilter
+            value={category}
+            onChange={setCategoryFilter}
+            categories={categoryFilterOptions}
+            responsive
+          />
 
           <ProductFilters
 
@@ -313,8 +263,6 @@ export function StorePage() {
             filters={filters}
 
             options={filterOptions}
-
-            hasBuildParts={hasBuildParts}
 
             onChange={(next) => {
               setFilters(next)
@@ -345,7 +293,6 @@ export function StorePage() {
               category={category}
               filters={filters}
               options={filterOptions}
-              hasBuildParts={hasBuildParts}
               onChange={setFilters}
               getCount={getFilterCount}
             />
@@ -387,12 +334,6 @@ export function StorePage() {
                   {t('sortRecommended')}
 
                 </option>
-
-                {hasBuildParts && (
-                  <option value="compatible-first" className="bg-surface text-text">
-                    {t('sortCompatibleFirst')}
-                  </option>
-                )}
 
                 <option value="in-stock" className="bg-surface text-text">
 
@@ -508,24 +449,6 @@ export function StorePage() {
                   >
 
                     {t('inStockOnly')} ×
-
-                  </button>
-
-                )}
-
-                {filters.hideIncompatible && (
-
-                  <button
-
-                    type="button"
-
-                    onClick={() => setFilters({ ...filters, hideIncompatible: false })}
-
-                    className="chip chip-active px-3 py-1 text-xs font-medium"
-
-                  >
-
-                    {t('hideIncompatible')} ×
 
                   </button>
 
@@ -751,39 +674,37 @@ export function StorePage() {
             <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-3">
 
               {filtered.map((product, index) => {
-
-                const compat = getProductCompatState(product, build)
+                const showAddToBuilder =
+                  product.category === 'Prebuilt PC' || isBuilderCategory(product.category)
 
                 return (
-
                   <div key={product.id} style={{ animationDelay: `${index * 45}ms` }}>
 
                     <ProductCard
 
                       product={product}
 
-                      compatible={compat.compatible}
-
-                      incompatibilityReason={compat.reasonKey}
-
-                      showCompatibilityBadge={hasBuildParts && product.category !== 'Prebuilt PC'}
-
-                      blockIncompatibleAdd={hasBuildParts}
+                      showCompatibilityBadge={false}
 
                       showCompare
 
-                      disabled={!isProductPurchasable(product, compat.compatible)}
+                      disabled={!isProductPurchasable(product, true)}
 
                       actionLabel={product.category === 'Prebuilt PC' ? 'Prebuilt System' : undefined}
 
-                      onAction={() => selectPart(product.category, product)}
+                      onAction={
+                        showAddToBuilder
+                          ? () => {
+                              const slot = getBuilderSlotForCategory(product.category)
+                              if (slot) selectPart(slot, product)
+                            }
+                          : undefined
+                      }
 
                     />
 
                   </div>
-
                 )
-
               })}
 
             </div>
@@ -793,89 +714,6 @@ export function StorePage() {
         </section>
 
       </div>
-
-
-
-      {(hasInstagramInfo(settings) || hasStoreLocationInfo(settings)) && (
-        <section
-          className={`section-enter stagger-2 mt-10 grid gap-6 ${
-            hasInstagramInfo(settings) && hasStoreLocationInfo(settings) ? 'lg:grid-cols-2' : 'lg:grid-cols-1'
-          }`}
-        >
-          {hasInstagramInfo(settings) && (
-            <article className="glass-card rounded-2xl p-6 shadow-glow">
-              <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand shadow-glow">
-                  <AtSign size={20} />
-                </span>
-                <h3 className="font-display text-xl font-semibold text-white">{t('instagramFeed')}</h3>
-              </div>
-              <InstagramFeed handle={settings.instagramHandle} profileUrl={settings.instagramUrl} />
-            </article>
-          )}
-
-          {hasStoreLocationInfo(settings) && (
-            <article className="glass-card rounded-2xl p-6 shadow-glow">
-              <div className="mb-5 flex items-center gap-3 border-b border-border pb-4">
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand-cyan shadow-glow-cyan">
-                  <MapPin size={20} />
-                </span>
-                <h3 className="font-display text-xl font-semibold text-white">{t('storeLocation')}</h3>
-              </div>
-
-              {mapEmbedUrl ? (
-                <div className="space-y-3">
-                  <iframe
-                    title={t('storeLocation')}
-                    src={mapEmbedUrl}
-                    className="h-[220px] w-full rounded-lg border border-brand/40 sm:h-[300px]"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                    allowFullScreen
-                  />
-                  {mapOpenUrl && (
-                    <a
-                      href={mapOpenUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="button-pop btn-ghost inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold"
-                    >
-                      <MapPin size={16} />
-                      {t('openInGoogleMaps')}
-                    </a>
-                  )}
-                </div>
-              ) : (
-                <div className="grid min-h-[120px] place-content-center rounded-lg border border-brand/30 bg-surface-2/70 p-4 text-center">
-                  <p className="text-sm text-text-muted">{t('mapPlaceholder')}</p>
-                  {settings.address.trim() && mapOpenUrl && (
-                    <a
-                      href={mapOpenUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand"
-                    >
-                      <MapPin size={14} />
-                      {t('openInGoogleMaps')}
-                    </a>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-4 space-y-2 text-sm text-text-muted">
-                {settings.address.trim() && <p className="text-white">{settings.address}</p>}
-                {settings.workingHours.trim() && <p>{settings.workingHours}</p>}
-                {settings.phone.trim() && (
-                  <p className="inline-flex items-center gap-2">
-                    <Phone size={14} />
-                    {settings.phone}
-                  </p>
-                )}
-              </div>
-            </article>
-          )}
-        </section>
-      )}
 
     </div>
 

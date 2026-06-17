@@ -1,4 +1,9 @@
 import type { Category, Product } from '../types'
+import {
+  getNumericSpecMax,
+  getSpecValues,
+  specValuesOverlap,
+} from '../utils/productSpecs'
 
 type CurrentBuild = Partial<Record<Category, Product>>
 
@@ -15,7 +20,34 @@ const cpuSocketToRamTypes: Record<string, string[]> = {
   LGA1851: ['DDR5'],
 }
 
-const toNumber = (value?: string) => Number.parseInt(value ?? '0', 10) || 0
+function allowedRamTypesForCpu(cpu: Product): string[] {
+  const types = new Set<string>()
+  for (const socket of getSpecValues(cpu.specs, 'socket')) {
+    for (const mem of cpuSocketToRamTypes[socket] ?? ['DDR4', 'DDR5']) {
+      types.add(mem)
+    }
+  }
+  return [...types]
+}
+
+function acceptedMbFormFactorsForCase(pcCase: Product): string[] {
+  const accepted = new Set<string>()
+  for (const formFactor of getSpecValues(pcCase.specs, 'formFactor')) {
+    for (const mb of caseFormFactorMatrix[formFactor] ?? []) {
+      accepted.add(mb)
+    }
+  }
+  return [...accepted]
+}
+
+function motherboardFitsCase(motherboard: Product, pcCase: Product): boolean {
+  const accepted = acceptedMbFormFactorsForCase(pcCase)
+  return getSpecValues(motherboard.specs, 'formFactor').some((ff) => accepted.includes(ff))
+}
+
+function ramMatchesMemoryTypes(ram: Product, memoryTypes: string[]): boolean {
+  return getSpecValues(ram.specs, 'memoryType').some((mem) => memoryTypes.includes(mem))
+}
 
 const isCompatibleByCategory = (candidate: Product, build: CurrentBuild): boolean => {
   const cpu = build.CPU
@@ -26,51 +58,49 @@ const isCompatibleByCategory = (candidate: Product, build: CurrentBuild): boolea
   const pcCase = build.Case
 
   if (candidate.category === 'Motherboard' && cpu) {
-    return candidate.specs.socket === cpu.specs.socket
+    return specValuesOverlap(candidate.specs, 'socket', cpu.specs, 'socket')
   }
 
   if (candidate.category === 'RAM') {
     if (motherboard) {
-      return candidate.specs.memoryType === motherboard.specs.memoryType
+      return specValuesOverlap(candidate.specs, 'memoryType', motherboard.specs, 'memoryType')
     }
     if (cpu) {
-      const allowed = cpuSocketToRamTypes[cpu.specs.socket] ?? ['DDR4', 'DDR5']
-      return allowed.includes(candidate.specs.memoryType)
+      return ramMatchesMemoryTypes(candidate, allowedRamTypesForCpu(cpu))
     }
   }
 
   if (candidate.category === 'PSU') {
-    const cpuTdp = toNumber(cpu?.specs.tdp)
-    const gpuTdp = toNumber(gpu?.specs.tdp)
+    const cpuTdp = getNumericSpecMax(cpu?.specs ?? {}, 'tdp')
+    const gpuTdp = getNumericSpecMax(gpu?.specs ?? {}, 'tdp')
     const required = cpuTdp + gpuTdp + 100
-    return toNumber(candidate.specs.wattage) >= required
+    return getNumericSpecMax(candidate.specs, 'wattage') >= required
   }
 
   if (candidate.category === 'Case' && motherboard) {
-    const accepted = caseFormFactorMatrix[candidate.specs.formFactor] ?? []
-    return accepted.includes(motherboard.specs.formFactor)
+    return motherboardFitsCase(motherboard, candidate)
   }
 
   if (candidate.category === 'Cooling' && cpu) {
-    return toNumber(cpu.specs.tdp) <= toNumber(candidate.specs.tdpSupport)
+    return getNumericSpecMax(cpu.specs, 'tdp') <= getNumericSpecMax(candidate.specs, 'tdpSupport')
   }
 
   if (candidate.category === 'CPU' && motherboard) {
-    return motherboard.specs.socket === candidate.specs.socket
+    return specValuesOverlap(candidate.specs, 'socket', motherboard.specs, 'socket')
   }
 
   if (candidate.category === 'GPU' && psu) {
-    const required = toNumber(cpu?.specs.tdp) + toNumber(candidate.specs.tdp) + 100
-    return toNumber(psu.specs.wattage) >= required
+    const required =
+      getNumericSpecMax(cpu?.specs ?? {}, 'tdp') + getNumericSpecMax(candidate.specs, 'tdp') + 100
+    return getNumericSpecMax(psu.specs, 'wattage') >= required
   }
 
   if (candidate.category === 'Motherboard' && pcCase) {
-    const accepted = caseFormFactorMatrix[pcCase.specs.formFactor] ?? []
-    return accepted.includes(candidate.specs.formFactor)
+    return motherboardFitsCase(candidate, pcCase)
   }
 
   if (candidate.category === 'Motherboard' && ram) {
-    return candidate.specs.memoryType === ram.specs.memoryType
+    return specValuesOverlap(candidate.specs, 'memoryType', ram.specs, 'memoryType')
   }
 
   return true

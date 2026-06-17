@@ -1,21 +1,21 @@
-import type { Category, Product, UseCaseTag } from '../types'
+import type { BuildMap, BuilderSlotId, Product, UseCaseTag } from '../types'
 import { getIncompatibilityReason } from '../data/compatibilityRules'
 import { inferBuildUseCaseSummary } from './useCaseTags'
+import { getProductsForBuilderSlot, isPcPartBuilderSlot } from './builderSlots'
 
 export function getSlotRecommendations(
-  category: Category,
+  slot: BuilderSlotId,
   products: Product[],
-  build: Partial<Record<Category, Product>>,
+  build: BuildMap,
   limit = 3,
 ): Product[] {
-  if (build[category]) return []
+  if (build[slot]) return []
+  if (!isPcPartBuilderSlot(slot)) {
+    return getProductsForBuilderSlot(slot, products).slice(0, limit)
+  }
 
-  const available = products.filter(
-    (p) =>
-      p.category === category &&
-      !p.discontinued &&
-      (p.stock > 0 || p.allowBackorder) &&
-      !getIncompatibilityReason(p, build),
+  const available = getProductsForBuilderSlot(slot, products).filter(
+    (product) => !getIncompatibilityReason(product, build),
   )
 
   const useCase = inferBuildUseCaseSummary(build)
@@ -28,5 +28,5 @@ export function getSlotRecommendations(
     return s
   }
 
-  return [...available].sort((a, b) => score(b) - score(a) || b.stock - a.stock).slice(0, limit)
+  return [...available].sort((a, b) => score(b) - score(a) || a.price - b.price).slice(0, limit)
 }

@@ -1,14 +1,18 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useProductsStore } from '../../store/productsStore'
 import type { Product } from '../../types'
 import { formatPrice } from '../../utils/compatibility'
+import { formatPrebuiltSpecDisplay, isPrebuiltPartSpecKey } from '../../utils/prebuiltSpecs'
+import { formatSpecDisplay, getSpecKeys } from '../../utils/productSpecs'
 
 interface PrebuiltCarouselProps {
   products: Product[]
 }
 
 export function PrebuiltCarousel({ products }: PrebuiltCarouselProps) {
+  const storeProducts = useProductsStore((state) => state.products)
   const trackRef = useRef<HTMLDivElement>(null)
   const [paused, setPaused] = useState(false)
 
@@ -76,11 +80,14 @@ export function PrebuiltCarousel({ products }: PrebuiltCarouselProps) {
               <span className="shrink-0 text-base font-semibold text-brand-cyan">{formatPrice(product.price)}</span>
             </div>
             <ul className="space-y-0.5 text-xs text-text-muted">
-              {Object.entries(product.specs)
+              {getSpecKeys(product.specs)
                 .slice(0, 5)
-                .map(([key, value]) => (
+                .map((key) => (
                   <li key={key}>
-                    <span className="text-text">{key}:</span> {value}
+                    <span className="text-text">{key}:</span>{' '}
+                    {isPrebuiltPartSpecKey(key)
+                      ? formatPrebuiltSpecDisplay(product.specs, key, storeProducts)
+                      : formatSpecDisplay(product.specs, key)}
                   </li>
                 ))}
             </ul>

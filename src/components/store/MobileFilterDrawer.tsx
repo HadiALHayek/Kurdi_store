@@ -11,7 +11,6 @@ interface MobileFilterDrawerProps {
   category: Category | 'All'
   filters: StoreFiltersState
   options: { sockets: string[]; memoryTypes: string[]; formFactors: string[] }
-  hasBuildParts: boolean
   onChange: (next: StoreFiltersState) => void
   getCount?: (apply: (base: StoreFiltersState) => StoreFiltersState) => number
 }

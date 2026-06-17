@@ -10,6 +10,20 @@ export function getStockLabelKey(product: Product, lowThreshold: number): StockL
   return 'outOfStock'
 }
 
+/** Storefront label — no unit counts and no low-stock quantity hints. */
+export function getCustomerStockLabelKey(product: Product, lowThreshold: number): StockLabelKey | null {
+  const key = getStockLabelKey(product, lowThreshold)
+  if (key === 'lowStock') return 'inStock'
+  return key
+}
+
+export function formatCustomerStockStatus(product: Product): string {
+  if (product.discontinued) return 'Unavailable'
+  if (product.stock > 0) return 'Available'
+  if (product.allowBackorder) return 'Backorder available'
+  return 'Out of stock'
+}
+
 export function isProductPurchasable(
   product: Product,
   compatible: boolean,

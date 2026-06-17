@@ -7,6 +7,7 @@ import { Footer } from './components/layout/Footer'
 import { Navbar } from './components/layout/Navbar'
 import { CompareTray } from './components/ui/CompareTray'
 import { ProductCardSkeleton } from './components/ui/Skeleton'
+import { HomePage } from './pages/HomePage'
 import { StorePage } from './pages/StorePage'
 import { ProductDetailsPage } from './pages/ProductDetailsPage'
 import { PCBuilderPage } from './pages/PCBuilderPage'
@@ -54,7 +55,8 @@ function App() {
       <main className="flex w-full flex-1 justify-center">
         <Suspense fallback={<PageFallback />}>
           <Routes>
-            <Route path="/" element={<StorePage />} />
+            <Route path="/" element={<HomePage />} />
+            <Route path="/products" element={<StorePage />} />
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/product/:productId" element={<ProductDetailsPage />} />
             <Route path="/builder" element={<PCBuilderPage />} />

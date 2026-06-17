@@ -5,6 +5,7 @@ import { useBuilderStore } from '../../store/builderStore'
 import { trackEvent } from '../../store/analyticsStore'
 import { isProductPurchasable } from '../../utils/stockStatus'
 import { getProductCompatState } from '../../utils/productFilters'
+import { isBuilderCategory } from '../../utils/adminDepartmentSpecs'
 
 interface RelatedProductsProps {
   products: Product[]
@@ -23,6 +24,8 @@ export function RelatedProducts({ products, onSelect }: RelatedProductsProps) {
       <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
         {products.map((product) => {
           const compat = getProductCompatState(product, build)
+          const showAddToBuilder =
+            product.category === 'Prebuilt PC' || isBuilderCategory(product.category)
           return (
             <ProductCard
               key={product.id}
@@ -32,10 +35,14 @@ export function RelatedProducts({ products, onSelect }: RelatedProductsProps) {
               showCompatibilityBadge={Object.keys(build).length > 0}
               disabled={!isProductPurchasable(product, compat.compatible)}
               actionLabel={t('addToBuilder')}
-              onAction={() => {
-                onSelect(product)
-                trackEvent('add_to_builder', { from: 'related', productId: product.id })
-              }}
+              onAction={
+                showAddToBuilder
+                  ? () => {
+                      onSelect(product)
+                      trackEvent('add_to_builder', { from: 'related', productId: product.id })
+                    }
+                  : undefined
+              }
             />
           )
         })}

@@ -4,9 +4,11 @@ import { LogOut } from 'lucide-react'
 import { useI18n } from '../../i18n'
 import { adminLogout } from '../../utils/adminAuth'
 
+type AdminView = 'products' | 'add' | 'analytics' | 'customers' | 'settings'
+
 interface AdminLayoutProps {
-  active: 'products' | 'add' | 'analytics' | 'settings'
-  onNavigate: (view: 'products' | 'add' | 'analytics' | 'settings') => void
+  active: AdminView
+  onNavigate: (view: AdminView) => void
   children: ReactNode
 }
 
@@ -14,9 +16,10 @@ export function AdminLayout({ active, onNavigate, children }: AdminLayoutProps) 
   const { t, lang, setLang } = useI18n()
   const navigate = useNavigate()
 
-  const items: Array<{ key: 'products' | 'add' | 'analytics' | 'settings'; label: string }> = [
+  const items: Array<{ key: AdminView; label: string }> = [
     { key: 'products', label: t('products') },
     { key: 'add', label: t('addProduct') },
+    { key: 'customers', label: t('customers') },
     { key: 'analytics', label: t('analytics') },
     { key: 'settings', label: t('storeSettings') },
   ]

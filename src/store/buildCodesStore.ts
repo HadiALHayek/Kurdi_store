@@ -1,11 +1,10 @@
 import { create } from 'zustand'
-import type { Category, Product } from '../types'
+import type { BuildMap } from '../types'
 import { encodeBuildToParam } from '../utils/buildShare'
 
 const STORAGE_KEY = 'kurdi_build_codes_v1'
-const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
-type BuildMap = Partial<Record<Category, Product>>
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 interface CodeEntry {
   param: string

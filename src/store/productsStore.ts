@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Category, Product } from '../types'
+import { StorageQuotaError } from '../utils/imageUpload'
 
 const STORAGE_KEY = 'kurdi_products_v1'
 
@@ -17,7 +18,14 @@ const loadProducts = () => {
 }
 
 const persist = (products: Product[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(products))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(products))
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+      throw new StorageQuotaError()
+    }
+    throw error
+  }
 }
 
 interface ProductsState {

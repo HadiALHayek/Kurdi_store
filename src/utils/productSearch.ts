@@ -1,4 +1,5 @@
 import type { Product } from '../types'
+import { flattenSpecsForSearch } from './productSpecs'
 
 /** Search product name, description, category, SKU, and all spec values. */
 export function productMatchesSearchQuery(product: Product, query: string): boolean {
@@ -10,7 +11,7 @@ export function productMatchesSearchQuery(product: Product, query: string): bool
     product.description,
     product.category,
     product.sku ?? '',
-    ...Object.entries(product.specs).flatMap(([key, value]) => [key, value]),
+    ...flattenSpecsForSearch(product.specs),
   ]
     .join(' ')
     .toLowerCase()

@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
@@ -6,19 +7,22 @@ interface ModalProps {
   title: string
   onClose: () => void
   children: ReactNode
+  size?: 'md' | 'lg'
 }
 
-export function Modal({ open, title, onClose, children }: ModalProps) {
+export function Modal({ open, title, onClose, children, size = 'lg' }: ModalProps) {
   if (!open) return null
 
-  return (
+  const widthClass = size === 'md' ? 'max-w-lg' : 'max-w-2xl'
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center sm:p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="glass-card max-h-[92vh] w-full max-w-2xl animate-modal-in overflow-y-auto rounded-2xl p-5 shadow-glow-strong sm:max-h-[90vh] sm:p-6"
+        className={`glass-card max-h-[min(90vh,720px)] w-full ${widthClass} animate-modal-in overflow-y-auto rounded-2xl p-5 shadow-glow-strong sm:p-6`}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -39,6 +43,7 @@ export function Modal({ open, title, onClose, children }: ModalProps) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

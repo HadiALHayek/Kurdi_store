@@ -15,8 +15,8 @@ export function Footer() {
             <p className="mt-1 max-w-sm text-sm text-text-muted">{t('brandTagline')}</p>
           </div>
           <div className="flex flex-wrap justify-center gap-4 text-sm sm:justify-end">
-            <Link to="/" className="text-text-muted transition hover:text-brand-cyan">
-              {t('navStore')}
+            <Link to="/products" className="text-text-muted transition hover:text-brand-cyan">
+              {t('navProducts')}
             </Link>
             <Link to="/builder" className="text-text-muted transition hover:text-brand-cyan">
               {t('navBuilder')}

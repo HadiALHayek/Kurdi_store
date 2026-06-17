@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { RelatedProducts } from '../components/product/RelatedProducts'
 import { ProductBundles } from '../components/product/ProductBundles'
-import { CompatibilityBadge } from '../components/ui/CompatibilityBadge'
 import { injectProductJsonLd, usePageMeta } from '../hooks/usePageMeta'
 import { useI18n } from '../i18n'
 import { trackEvent } from '../store/analyticsStore'
@@ -12,11 +11,14 @@ import { useBundlesStore } from '../store/bundlesStore'
 import { useProductsStore } from '../store/productsStore'
 import { useSettingsStore } from '../store/settingsStore'
 import { formatPrice } from '../utils/compatibility'
-import { getProductCompatState } from '../utils/productFilters'
 import { pushRecentlyViewed } from '../utils/recentlyViewed'
 import { getRelatedProducts, getBundlesForProduct } from '../utils/relatedProducts'
 import { shouldShowStockNotify, stockNotifyWhatsAppUrl } from '../utils/stockNotify'
-import { isProductPurchasable, getStockLabelKey } from '../utils/stockStatus'
+import { formatPrebuiltSpecDisplay, isPrebuiltPartSpecKey } from '../utils/prebuiltSpecs'
+import { formatSpecDisplay, getSpecKeys } from '../utils/productSpecs'
+import { isBuilderCategory } from '../utils/adminDepartmentSpecs'
+import { getBuilderSlotForCategory } from '../utils/builderSlots'
+import { isProductPurchasable, getCustomerStockLabelKey } from '../utils/stockStatus'
 import { getProductUseCaseTags } from '../utils/useCaseTags'
 
 export function ProductDetailsPage() {
@@ -61,9 +63,10 @@ export function ProductDetailsPage() {
   if (!product) return <Navigate to="/" replace />
 
   const useCaseTags = getProductUseCaseTags(product)
-  const compat = getProductCompatState(product, build)
-  const canAdd = isProductPurchasable(product, compat.compatible)
-  const stockKey = getStockLabelKey(product, settings.lowStockThreshold)
+  const isPrebuilt = product.category === 'Prebuilt PC'
+  const showBuilderActions = isPrebuilt || isBuilderCategory(product.category)
+  const canAdd = showBuilderActions && isProductPurchasable(product, true)
+  const stockKey = getCustomerStockLabelKey(product, settings.lowStockThreshold)
   const showWasPrice = product.previousPrice != null && product.previousPrice > product.price
   const showStockNotify = shouldShowStockNotify(product)
   const stockNotifyUrl =
@@ -73,7 +76,8 @@ export function ProductDetailsPage() {
 
   const addBundle = (items: typeof products) => {
     for (const item of items) {
-      if (item.category !== 'Prebuilt PC') selectPart(item.category, item)
+      const slot = getBuilderSlotForCategory(item.category)
+      if (slot) selectPart(slot, item)
     }
     trackEvent('add_to_builder', { from: 'bundle', count: String(items.length) })
   }
@@ -81,9 +85,9 @@ export function ProductDetailsPage() {
   return (
     <div className="page-enter mx-auto w-full max-w-7xl px-4 py-6 pb-28 sm:py-8 md:px-8">
       <nav className="section-enter mb-6 flex flex-wrap items-center gap-2 text-sm">
-        <Link to="/" className="btn-ghost button-pop inline-flex items-center gap-2 rounded-lg px-3 py-2">
+        <Link to="/products" className="btn-ghost button-pop inline-flex items-center gap-2 rounded-lg px-3 py-2">
           <ArrowLeft size={16} />
-          {t('navStore')}
+          {t('navProducts')}
         </Link>
         <span className="text-text-muted">/</span>
         <span className="chip px-3 py-1 text-xs font-medium text-text-muted">{product.category}</span>
@@ -139,11 +143,6 @@ export function ProductDetailsPage() {
                 {t('staffPick')}
               </span>
             )}
-            {stockKey === 'lowStock' && (
-              <span className="rounded-full border border-danger/40 bg-danger/15 px-3 py-1 text-xs font-semibold text-danger">
-                {t('lowStockUrgency')}
-              </span>
-            )}
             {stockKey === 'backorderAvailable' && (
               <span className="rounded-full border border-warning/40 bg-warning/15 px-3 py-1 text-xs font-semibold text-warning">
                 {t('backorderAvailable')} ({settings.backorderLeadDays} {t('days')})
@@ -154,16 +153,13 @@ export function ProductDetailsPage() {
                 {t(`useCase_${tag}` as 'useCase_gaming')}
               </span>
             ))}
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-text-muted">
-              <PackageCheck size={14} />
-              {stockKey === 'inStock' && t('inStock')}
-              {stockKey === 'lowStock' && t('lowStockUrgency')}
-              {stockKey === 'outOfStock' && t('outOfStock')}
-              {stockKey === 'backorderAvailable' && t('backorderAvailable')}
-              {!stockKey && `${t('stock')}: ${product.stock}`}
-            </span>
-            {Object.keys(build).length > 0 && product.category !== 'Prebuilt PC' && (
-              <CompatibilityBadge compatible={compat.compatible} reasonKey={compat.reasonKey} expandable={!compat.compatible} />
+            {stockKey && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-3 py-1 text-xs text-text-muted">
+                <PackageCheck size={14} />
+                {stockKey === 'inStock' && t('inStock')}
+                {stockKey === 'outOfStock' && t('outOfStock')}
+                {stockKey === 'backorderAvailable' && t('backorderAvailable')}
+              </span>
             )}
           </div>
 
@@ -211,7 +207,8 @@ export function ProductDetailsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  selectPart(product.category, product)
+                  const slot = getBuilderSlotForCategory(product.category)
+                  if (slot) selectPart(slot, product)
                   trackEvent('add_to_builder', { from: 'pdp', productId: product.id })
                 }}
                 className="button-pop btn-primary inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
@@ -252,13 +249,17 @@ export function ProductDetailsPage() {
           <div className="mt-6 rounded-xl border border-border bg-surface-2/50 p-4">
             <h2 className="mb-4 font-display text-lg font-semibold text-white">{t('fieldSpecs')}</h2>
             <ul className="grid gap-2 sm:grid-cols-2">
-              {Object.entries(product.specs).map(([key, value]) => (
+              {getSpecKeys(product.specs).map((key) => (
                 <li
                   key={key}
                   className="rounded-lg border border-border/80 bg-surface/80 px-3 py-2.5 transition hover:border-brand/30"
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">{key}</p>
-                  <p className="mt-0.5 font-medium text-text">{value}</p>
+                  <p className="mt-0.5 font-medium text-text">
+                    {product.category === 'Prebuilt PC' && isPrebuiltPartSpecKey(key)
+                      ? formatPrebuiltSpecDisplay(product.specs, key, products)
+                      : formatSpecDisplay(product.specs, key)}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -270,7 +271,8 @@ export function ProductDetailsPage() {
       <RelatedProducts
         products={related}
         onSelect={(p) => {
-          selectPart(p.category, p)
+          const slot = getBuilderSlotForCategory(p.category)
+          if (slot) selectPart(slot, p)
         }}
       />
 
@@ -284,7 +286,8 @@ export function ProductDetailsPage() {
             <button
               type="button"
               onClick={() => {
-                selectPart(product.category, product)
+                const slot = getBuilderSlotForCategory(product.category)
+                if (slot) selectPart(slot, product)
                 trackEvent('add_to_builder', { from: 'pdp_mobile', productId: product.id })
               }}
               className="button-pop btn-primary shrink-0 rounded-xl px-4 py-3 text-sm font-semibold"

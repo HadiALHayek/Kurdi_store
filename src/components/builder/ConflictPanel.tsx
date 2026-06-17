@@ -4,6 +4,7 @@ import { useI18n } from '../../i18n'
 import { useBuilderStore } from '../../store/builderStore'
 import { incompatReasonTranslationKey } from '../../utils/incompatReason'
 import { getBuildConflicts } from '../../utils/buildFixSuggestions'
+import { getSlotLabelKey } from '../../utils/builderSlots'
 
 export function ConflictPanel() {
   const { t } = useI18n()
@@ -24,7 +25,7 @@ export function ConflictPanel() {
         {conflicts.map(({ slot, part, reasonKey }) => (
           <li key={slot} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface/80 px-3 py-2 text-sm">
             <div className="min-w-0">
-              <span className="font-medium text-white">{slot}:</span>{' '}
+              <span className="font-medium text-white">{getSlotLabelKey(slot) ? t(getSlotLabelKey(slot)!) : slot}:</span>{' '}
               <span className="text-text-muted">{part.name}</span>
               <p className="text-xs text-danger">{t(incompatReasonTranslationKey(reasonKey))}</p>
             </div>

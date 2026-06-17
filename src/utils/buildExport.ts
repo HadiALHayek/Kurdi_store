@@ -1,28 +1,19 @@
-import type { Category, Product } from '../types'
+import type { BuildMap } from '../types'
 import { formatPrice } from './compatibility'
+import { getSelectedBuildEntries } from './builderSlots'
 
-const slotsOrder: Category[] = [
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
-
-export function formatBuildListText(
-  build: Partial<Record<Category, Product>>,
-  total: number,
-  storeName = 'Kurdi Store',
-): string {
+export function formatBuildListText(build: BuildMap, _total: number, storeName = 'Kurdi Store'): string {
   const lines = [`${storeName} — PC Build`, '']
-  for (const slot of slotsOrder) {
-    const part = build[slot]
-    lines.push(`${slot}: ${part ? `${part.name} (${formatPrice(part.price)})` : '—'}`)
+  const selected = getSelectedBuildEntries(build)
+  if (selected.length === 0) {
+    lines.push('No parts selected.')
+  } else {
+    for (const { slot, product } of selected) {
+      lines.push(`${slot}: ${product.name} (${formatPrice(product.price)})`)
+    }
   }
-  lines.push('', `Total: ${formatPrice(total)}`)
+  const quoteTotal = selected.reduce((sum, { product }) => sum + product.price, 0)
+  lines.push('', `Total: ${formatPrice(quoteTotal)}`)
   return lines.join('\n')
 }
 

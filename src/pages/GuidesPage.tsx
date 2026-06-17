@@ -1,45 +1,16 @@
-import { ArrowRight, BookOpen, Wrench } from 'lucide-react'
+import { ArrowRight, BookOpen, Cpu, Wrench } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { buildGuides } from '../data/buildGuides'
-import { BUILDER_SLOTS_ORDER } from '../utils/builderSlots'
-import { useI18n } from '../i18n'
+import { GuideSection } from '../components/guides/GuideSection'
+import {
+  PC_GUIDE_COMPATIBILITY_SECTION,
+  PC_GUIDE_NAV_SECTIONS,
+  PC_GUIDE_PART_SECTIONS,
+} from '../data/pcGuideContent'
 import { usePageMeta } from '../hooks/usePageMeta'
-import { useBuilderStore } from '../store/builderStore'
-import { useBuildTemplatesStore } from '../store/buildTemplatesStore'
-import { useProductsStore } from '../store/productsStore'
-import { trackEvent } from '../store/analyticsStore'
-import { formatPrice } from '../utils/compatibility'
-import type { BuildTemplate, Product } from '../types'
-
-function templateBudget(template: BuildTemplate, products: Product[]): number {
-  let total = 0
-  for (const slot of BUILDER_SLOTS_ORDER) {
-    const productId = template.parts[slot]
-    if (!productId) continue
-    const product = products.find((p) => p.id === productId)
-    if (product) total += product.price
-  }
-  return total
-}
-
-function templateCoverImage(template: BuildTemplate, products: Product[]): string | null {
-  for (const slot of BUILDER_SLOTS_ORDER) {
-    const productId = template.parts[slot]
-    if (!productId) continue
-    const product = products.find((p) => p.id === productId)
-    if (product?.imageUrl) return product.imageUrl
-  }
-  return null
-}
+import { useI18n } from '../i18n'
 
 export function GuidesPage() {
   const { t } = useI18n()
-  const applyPreset = useBuilderStore((s) => s.applyPreset)
-  const applyTemplate = useBuilderStore((s) => s.applyTemplate)
-  const products = useProductsStore((s) => s.products)
-  const templates = useBuildTemplatesStore((s) => s.templates)
-
-  const hasContent = buildGuides.length > 0 || templates.length > 0
 
   usePageMeta({
     title: `${t('guidesTitle')} | Kurdi Store`,
@@ -58,114 +29,87 @@ export function GuidesPage() {
         <p className="mt-2 max-w-2xl text-text-muted">{t('guidesSubtitle')}</p>
       </header>
 
-      {!hasContent ? (
-        <div className="glass-card section-enter rounded-2xl border-dashed border-brand/25 p-10 text-center">
-          <Wrench size={40} className="mx-auto text-brand/60" />
-          <p className="mt-4 font-display text-lg font-semibold text-white">{t('guidesEmpty')}</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-text-muted">{t('guidesEmptyHint')}</p>
-          <Link
-            to="/builder"
-            className="button-pop btn-primary mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold"
-          >
-            {t('openBuilder')}
-            <ArrowRight size={16} />
-          </Link>
-        </div>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {buildGuides.map((guide) => (
-            <article key={guide.id} className="glass-card card-enter overflow-hidden rounded-2xl border-brand/15">
-              <img src={guide.imageUrl} alt="" className="h-44 w-full object-cover" loading="lazy" />
-              <div className="p-5">
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {guide.useCaseTags.map((tag) => (
-                    <span key={tag} className="chip px-2 py-0.5 text-[10px] capitalize">
-                      {t(`useCase_${tag}` as 'useCase_gaming')}
-                    </span>
-                  ))}
-                </div>
-                <h2 className="font-display text-xl font-bold text-white">{t(guide.titleKey)}</h2>
-                <p className="mt-2 text-sm text-text-muted">{t(guide.descKey)}</p>
-                <p className="mt-3 font-semibold text-brand-cyan">
-                  {t('guideBudget')}: {formatPrice(guide.budget)}
-                </p>
-                <div className="mt-4 flex flex-col gap-2">
-                  {guide.presetId && (
-                    <button
-                      type="button"
-                      className="btn-primary w-full rounded-xl py-2.5 text-sm font-semibold"
-                      onClick={() => {
-                        applyPreset(guide.presetId!, products)
-                        trackEvent('guide_view', { guide: guide.id, action: 'load_preset' })
-                      }}
-                    >
-                      {t('loadIntoBuilder')}
-                    </button>
-                  )}
-                  <Link
-                    to="/builder"
-                    className="btn-ghost inline-flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
-                    onClick={() => trackEvent('guide_view', { guide: guide.id })}
-                  >
-                    {t('openBuilder')}
-                    <ArrowRight size={16} />
-                  </Link>
-                </div>
-              </div>
-            </article>
+      <div className="section-enter flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+        <nav
+          aria-label={t('guideJumpTo')}
+          className="glass-card hidden shrink-0 rounded-2xl p-4 lg:sticky lg:top-24 lg:block lg:w-52"
+        >
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand">{t('guideJumpTo')}</p>
+          <ul className="space-y-1">
+            {PC_GUIDE_NAV_SECTIONS.map((section) => (
+              <li key={section.id}>
+                <a
+                  href={`#${section.id}`}
+                  className="block rounded-lg px-3 py-2 text-sm text-text-muted transition hover:bg-surface-2 hover:text-brand-light"
+                >
+                  {t(section.titleKey)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="min-w-0 flex-1 space-y-4">
+          <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1 lg:hidden">
+            {PC_GUIDE_NAV_SECTIONS.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="chip shrink-0 px-3 py-1.5 text-xs font-medium"
+              >
+                {t(section.titleKey)}
+              </a>
+            ))}
+          </div>
+
+          {PC_GUIDE_PART_SECTIONS.map((section, index) => (
+            <GuideSection key={section.id} section={section} defaultOpen={index === 0} />
           ))}
 
-          {templates.map((template) => {
-            const cover = templateCoverImage(template, products)
-            const budget = templateBudget(template, products)
-            return (
-              <article
-                key={template.id}
-                className="glass-card card-enter overflow-hidden rounded-2xl border-brand/15"
-              >
-                {cover ? (
-                  <img src={cover} alt="" className="h-44 w-full object-cover" loading="lazy" />
-                ) : (
-                  <div className="flex h-44 items-center justify-center bg-gradient-brand-soft">
-                    <Wrench size={36} className="text-brand/50" />
-                  </div>
-                )}
-                <div className="p-5">
-                  <h2 className="font-display text-xl font-bold text-white">{template.name}</h2>
-                  {template.description && (
-                    <p className="mt-2 text-sm text-text-muted">{template.description}</p>
-                  )}
-                  {budget > 0 && (
-                    <p className="mt-3 font-semibold text-brand-cyan">
-                      {t('guideBudget')}: {formatPrice(budget)}
-                    </p>
-                  )}
-                  <div className="mt-4 flex flex-col gap-2">
-                    <button
-                      type="button"
-                      className="btn-primary w-full rounded-xl py-2.5 text-sm font-semibold"
-                      onClick={() => {
-                        applyTemplate(template.id, products)
-                        trackEvent('guide_view', { guide: template.id, action: 'load_template' })
-                      }}
-                    >
-                      {t('loadIntoBuilder')}
-                    </button>
-                    <Link
-                      to="/builder"
-                      className="btn-ghost inline-flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
-                      onClick={() => trackEvent('guide_view', { guide: template.id })}
-                    >
-                      {t('openBuilder')}
-                      <ArrowRight size={16} />
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            )
-          })}
+          <GuideSection section={PC_GUIDE_COMPATIBILITY_SECTION} />
         </div>
-      )}
+      </div>
+
+      <section className="section-enter mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Link
+          to="/builder"
+          className="glass-card group flex flex-col rounded-2xl border-brand/20 p-6 transition hover:border-brand/40 hover:shadow-glow"
+        >
+          <Wrench size={28} className="text-brand-cyan" />
+          <h2 className="mt-3 font-display text-lg font-bold text-white">{t('guideCtaBuilder')}</h2>
+          <p className="mt-1 flex-1 text-sm text-text-muted">{t('guideCtaBuilderDesc')}</p>
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-cyan group-hover:underline">
+            {t('openBuilder')}
+            <ArrowRight size={16} />
+          </span>
+        </Link>
+
+        <Link
+          to="/products?department=pc-parts"
+          className="glass-card group flex flex-col rounded-2xl border-brand/20 p-6 transition hover:border-brand/40 hover:shadow-glow"
+        >
+          <Cpu size={28} className="text-brand-cyan" />
+          <h2 className="mt-3 font-display text-lg font-bold text-white">{t('guideCtaParts')}</h2>
+          <p className="mt-1 flex-1 text-sm text-text-muted">{t('deptPcPartsDesc')}</p>
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-cyan group-hover:underline">
+            {t('browseProducts')}
+            <ArrowRight size={16} />
+          </span>
+        </Link>
+
+        <Link
+          to="/products?department=prebuilt"
+          className="glass-card group flex flex-col rounded-2xl border-brand/20 p-6 transition hover:border-brand/40 hover:shadow-glow sm:col-span-2 lg:col-span-1"
+        >
+          <BookOpen size={28} className="text-brand-cyan" />
+          <h2 className="mt-3 font-display text-lg font-bold text-white">{t('guideCtaPrebuilt')}</h2>
+          <p className="mt-1 flex-1 text-sm text-text-muted">{t('deptPrebuiltDesc')}</p>
+          <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-cyan group-hover:underline">
+            {t('browseProducts')}
+            <ArrowRight size={16} />
+          </span>
+        </Link>
+      </section>
     </div>
   )
 }

@@ -8,6 +8,28 @@ export type Category =
   | 'PSU'
   | 'Case'
   | 'Cooling'
+  | 'Monitor'
+  | 'Laptop'
+  | 'Keyboard'
+  | 'Mouse'
+  | 'Headset'
+  | 'Webcam'
+  | 'Cable'
+  | 'Other Accessory'
+
+export type ShopDepartment = 'pc-parts' | 'prebuilt' | 'monitors' | 'laptops' | 'accessories'
+
+export type BuilderSlotId =
+  | 'CPU'
+  | 'Motherboard'
+  | 'RAM'
+  | 'GPU'
+  | 'Storage'
+  | 'PSU'
+  | 'Case'
+  | 'Cooling'
+  | 'Monitor'
+  | 'Accessory'
 
 export type UseCaseTag =
   | '1080p'
@@ -27,9 +49,10 @@ export interface Product {
   price: number
   previousPrice?: number
   category: Category
+  department?: ShopDepartment
   imageUrl: string
   imageUrls?: string[]
-  specs: Record<string, string>
+  specs: Record<string, string | string[]>
   stock: number
   createdAt: number
   sku?: string
@@ -43,6 +66,8 @@ export interface Product {
   instagramPostUrl?: string
   bundleIds?: string[]
 }
+
+export type BuildMap = Partial<Record<BuilderSlotId, Product>>
 
 export interface ProductBundle {
   id: string
@@ -98,4 +123,15 @@ export interface AnalyticsEvent {
   type: AnalyticsEventType
   payload: Record<string, string>
   at: number
+}
+
+export interface CustomerQuoteRequest {
+  id: string
+  name: string
+  phone: string
+  partsSummary: string
+  partCount: number
+  total: number
+  buildCode?: string
+  createdAt: number
 }

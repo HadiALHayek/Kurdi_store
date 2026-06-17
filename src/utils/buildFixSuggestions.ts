@@ -1,23 +1,26 @@
 import { getIncompatibilityReason } from '../data/compatibilityRules'
 import type { IncompatReasonKey } from '../data/compatibilityRules'
-import type { Category, Product } from '../types'
+import type { BuildMap, BuilderSlotId, Product } from '../types'
+import { getNumericSpecMax } from './productSpecs'
+import { isPcPartBuilderSlot } from './builderSlots'
 
 export interface FixSuggestion {
-  slot: Category
+  slot: BuilderSlotId
   reasonKey: IncompatReasonKey
   product: Product
   label: string
 }
 
 export function getBuildFixSuggestions(
-  build: Partial<Record<Category, Product>>,
+  build: BuildMap,
   products: Product[],
   limit = 4,
 ): FixSuggestion[] {
   const suggestions: FixSuggestion[] = []
-  const slots = Object.keys(build) as Category[]
+  const slots = Object.keys(build) as BuilderSlotId[]
 
   for (const slot of slots) {
+    if (!isPcPartBuilderSlot(slot)) continue
     const current = build[slot]
     if (!current) continue
     const reason = getIncompatibilityReason(current, build)
@@ -43,8 +46,8 @@ export function getBuildFixSuggestions(
 
   if (reasonNeedsPsu(build) && !suggestions.some((s) => s.slot === 'PSU')) {
     const required =
-      (Number.parseInt(build.CPU?.specs.tdp ?? '0', 10) || 0) +
-      (Number.parseInt(build.GPU?.specs.tdp ?? '0', 10) || 0) +
+      getNumericSpecMax(build.CPU?.specs ?? {}, 'tdp') +
+      getNumericSpecMax(build.GPU?.specs ?? {}, 'tdp') +
       100
     const psu = products
       .filter(
@@ -52,7 +55,7 @@ export function getBuildFixSuggestions(
           p.category === 'PSU' &&
           p.stock > 0 &&
           !p.discontinued &&
-          (Number.parseInt(p.specs.wattage ?? '0', 10) || 0) >= required,
+          getNumericSpecMax(p.specs, 'wattage') >= required,
       )
       .sort((a, b) => a.price - b.price)[0]
     if (psu) {
@@ -63,22 +66,23 @@ export function getBuildFixSuggestions(
   return suggestions.slice(0, limit)
 }
 
-function reasonNeedsPsu(build: Partial<Record<Category, Product>>) {
+function reasonNeedsPsu(build: BuildMap) {
   const psu = build.PSU
   if (!psu) return Boolean(build.CPU && build.GPU)
   const required =
-    (Number.parseInt(build.CPU?.specs.tdp ?? '0', 10) || 0) +
-    (Number.parseInt(build.GPU?.specs.tdp ?? '0', 10) || 0) +
+    getNumericSpecMax(build.CPU?.specs ?? {}, 'tdp') +
+    getNumericSpecMax(build.GPU?.specs ?? {}, 'tdp') +
     100
-  return (Number.parseInt(psu.specs.wattage ?? '0', 10) || 0) < required
+  return getNumericSpecMax(psu.specs, 'wattage') < required
 }
 
 export function getBuildConflicts(
-  build: Partial<Record<Category, Product>>,
-  slotsOrder: Category[],
-): Array<{ slot: Category; part: Product; reasonKey: IncompatReasonKey }> {
-  const conflicts: Array<{ slot: Category; part: Product; reasonKey: IncompatReasonKey }> = []
+  build: BuildMap,
+  slotsOrder: BuilderSlotId[],
+): Array<{ slot: BuilderSlotId; part: Product; reasonKey: IncompatReasonKey }> {
+  const conflicts: Array<{ slot: BuilderSlotId; part: Product; reasonKey: IncompatReasonKey }> = []
   for (const slot of slotsOrder) {
+    if (!isPcPartBuilderSlot(slot)) continue
     const part = build[slot]
     if (!part) continue
     const reason = getIncompatibilityReason(part, build)

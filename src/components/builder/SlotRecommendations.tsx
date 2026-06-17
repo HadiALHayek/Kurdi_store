@@ -1,22 +1,25 @@
-import type { Category, Product } from '../../types'
+import type { BuilderSlotId, Product } from '../../types'
 import { useI18n } from '../../i18n'
 import { formatPrice } from '../../utils/compatibility'
+import { getSlotLabelKey } from '../../utils/builderSlots'
 
 interface SlotRecommendationsProps {
-  category: Category
+  slot: BuilderSlotId
   recommendations: Product[]
   onSelect: (product: Product) => void
 }
 
-export function SlotRecommendations({ category, recommendations, onSelect }: SlotRecommendationsProps) {
+export function SlotRecommendations({ slot, recommendations, onSelect }: SlotRecommendationsProps) {
   const { t } = useI18n()
+  const labelKey = getSlotLabelKey(slot)
+  const slotLabel = labelKey ? t(labelKey) : slot
 
   if (recommendations.length === 0) return null
 
   return (
     <div className="mb-4 rounded-xl border border-brand-cyan/25 bg-brand-cyan/5 p-3">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-cyan">
-        {t('slotRecommendations')} — {category}
+        {t('slotRecommendations')} — {slotLabel}
       </p>
       <div className="flex flex-wrap gap-2">
         {recommendations.map((product) => (

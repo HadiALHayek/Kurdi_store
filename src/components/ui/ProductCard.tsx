@@ -10,13 +10,31 @@ import { getProductUseCaseTags } from '../../utils/useCaseTags'
 import { trackEvent } from '../../store/analyticsStore'
 import { useCompareStore, MAX_COMPARE_ITEMS } from '../../store/compareStore'
 import { useSettingsStore } from '../../store/settingsStore'
-import { getStockLabelKey } from '../../utils/stockStatus'
+import { formatSpecDisplay, hasSpecKey } from '../../utils/productSpecs'
+import { getCustomerStockLabelKey } from '../../utils/stockStatus'
 
-const SPEC_PRIORITY_KEYS = ['socket', 'memoryType', 'tdp', 'wattage', 'formFactor', 'vram', 'capacity', 'speed'] as const
+const SPEC_PRIORITY_KEYS = [
+  'socket',
+  'memoryType',
+  'tdp',
+  'wattage',
+  'formFactor',
+  'vram',
+  'capacity',
+  'speed',
+  'screenSize',
+  'resolution',
+  'refreshRate',
+  'panelType',
+  'cpu',
+  'ram',
+  'storage',
+  'gpu',
+] as const
 
 interface ProductCardProps {
   product: Product
-  onAction: () => void
+  onAction?: () => void
   actionLabel?: string
   compatible?: boolean
   incompatibilityReason?: IncompatReasonKey | null
@@ -46,13 +64,13 @@ export function ProductCard({
   const compareFull = compareIds.length >= MAX_COMPARE_ITEMS && !isCompared
   const useCaseTags = getProductUseCaseTags(product).slice(0, 3)
   const lowThreshold = useSettingsStore((s) => s.settings.lowStockThreshold)
-  const stockKey = getStockLabelKey(product, lowThreshold)
+  const stockKey = getCustomerStockLabelKey(product, lowThreshold)
   const showWasPrice = product.previousPrice != null && product.previousPrice > product.price
 
-  const selectedSpecEntries = SPEC_PRIORITY_KEYS.filter((key) => product.specs[key])
+  const selectedSpecEntries = SPEC_PRIORITY_KEYS.filter((key) => hasSpecKey(product.specs, key))
     .slice(0, 3)
-    .map((key) => [key, product.specs[key]] as const)
-  const specRows = [...selectedSpecEntries, ['stock', String(product.stock)] as const].slice(0, 4)
+    .map((key) => [key, formatSpecDisplay(product.specs, key)] as const)
+  const specRows = selectedSpecEntries.slice(0, 4)
 
   const prettifySpecKey = (key: string) => {
     if (key === 'tdp') return 'TDP'
@@ -89,9 +107,9 @@ export function ProductCard({
             {t('staffPick')}
           </span>
         )}
-        {stockKey === 'lowStock' && (
+        {stockKey === 'outOfStock' && (
           <span className="absolute left-3 top-10 rounded-full border border-danger/50 bg-danger/40 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
-            {t('lowStockUrgency')}
+            {t('outOfStock')}
           </span>
         )}
         <span className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-brand/40 bg-brand/30 text-brand-light opacity-0 backdrop-blur-sm transition-all duration-300 group-hover:scale-110 group-hover:opacity-100">
@@ -161,20 +179,22 @@ export function ProductCard({
               <GitCompare size={16} />
             </button>
           )}
-          <button
-            type="button"
-            disabled={disabled || addBlocked}
-            title={addBlocked ? t('addIncompatibleDisabled') : undefined}
-            onClick={(event) => {
-              event.stopPropagation()
-              onAction()
-              trackEvent('add_to_builder', { from: 'store', productId: product.id })
-            }}
-            className="button-pop btn-primary inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
-          >
-            <ShoppingCart size={16} />
-            {addBlocked ? t('wontFit') : (actionLabel ?? t('addToBuilder'))}
-          </button>
+          {onAction && (
+            <button
+              type="button"
+              disabled={disabled || addBlocked}
+              title={addBlocked ? t('addIncompatibleDisabled') : undefined}
+              onClick={(event) => {
+                event.stopPropagation()
+                onAction()
+                trackEvent('add_to_builder', { from: 'store', productId: product.id })
+              }}
+              className="button-pop btn-primary inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+            >
+              <ShoppingCart size={16} />
+              {addBlocked ? t('wontFit') : (actionLabel ?? t('addToBuilder'))}
+            </button>
+          )}
         </div>
       </div>
     </article>

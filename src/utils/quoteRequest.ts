@@ -1,23 +1,15 @@
-import type { Category, Product } from '../types'
+import type { BuildMap } from '../types'
 import { formatPrice } from './compatibility'
+import { formatCustomerStockStatus } from './stockStatus'
 import { formatBuildListText } from './buildExport'
-
-const slotsOrder: Category[] = [
-  'CPU',
-  'Motherboard',
-  'RAM',
-  'GPU',
-  'Storage',
-  'PSU',
-  'Case',
-  'Cooling',
-]
+import { getSelectedBuildEntries } from './builderSlots'
 
 export function formatQuoteRequestText(
-  build: Partial<Record<Category, Product>>,
-  total: number,
+  build: BuildMap,
+  _total: number,
   store: { name: string; address: string; phone: string; hours: string },
   buildCode?: string,
+  customer?: { name: string; phone: string },
 ): string {
   const lines = [
     `${store.name} — Quote Request`,
@@ -27,31 +19,35 @@ export function formatQuoteRequestText(
     `Phone: ${store.phone}`,
     '',
   ]
+  if (customer) {
+    lines.push(`Customer: ${customer.name}`, `Customer phone: ${customer.phone}`, '')
+  }
   if (buildCode) lines.push(`Build code: ${buildCode}`, '')
 
-  for (const slot of slotsOrder) {
-    const part = build[slot]
-    if (!part) {
-      lines.push(`${slot}: —`)
-      continue
+  const selected = getSelectedBuildEntries(build)
+  if (selected.length === 0) {
+    lines.push('No parts selected.')
+  } else {
+    for (const { slot, product } of selected) {
+      const sku = product.sku ? ` [SKU: ${product.sku}]` : ''
+      const stock = formatCustomerStockStatus(product)
+      lines.push(`${slot}: ${product.name}${sku}`)
+      lines.push(`  ${formatPrice(product.price)} · ${stock}`)
     }
-    const sku = part.sku ? ` [SKU: ${part.sku}]` : ''
-    const stock =
-      part.stock > 0 ? `In stock: ${part.stock}` : part.allowBackorder ? 'Backorder OK' : 'Out of stock'
-    lines.push(`${slot}: ${part.name}${sku}`)
-    lines.push(`  ${formatPrice(part.price)} · ${stock}`)
   }
 
-  lines.push('', `Estimated total: ${formatPrice(total)}`, '', 'Please confirm availability and pickup time. Thank you!')
+  const quoteTotal = selected.reduce((sum, { product }) => sum + product.price, 0)
+
+  lines.push('', `Estimated total: ${formatPrice(quoteTotal)}`, '', 'Please confirm availability and pickup time. Thank you!')
   return lines.join('\n')
 }
 
-export function formatQuoteFromBuildList(build: Partial<Record<Category, Product>>, total: number) {
+export function formatQuoteFromBuildList(build: BuildMap, total: number) {
   return formatBuildListText(build, total)
 }
 
 export function printQuoteSheet(
-  build: Partial<Record<Category, Product>>,
+  build: BuildMap,
   total: number,
   store: { name: string; address: string; phone: string; hours: string },
   buildCode?: string,
