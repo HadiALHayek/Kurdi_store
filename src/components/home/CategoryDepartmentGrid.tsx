@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom'
 import { useI18n } from '../../i18n'
 import type { ShopDepartment } from '../../types'
-import { SHOP_DEPARTMENTS, DEPARTMENT_IMAGES } from '../../utils/shopDepartments'
+import { SHOP_DEPARTMENTS, getDepartmentImage } from '../../utils/shopDepartments'
+import { useSettingsStore } from '../../store/settingsStore'
 
 const DEPARTMENT_TITLE_KEYS: Record<
   ShopDepartment,
@@ -31,6 +32,7 @@ const DEPARTMENT_DESC_KEYS: Record<
 
 export function CategoryDepartmentGrid() {
   const { t } = useI18n()
+  const departmentImages = useSettingsStore((s) => s.settings.departmentImages)
 
   return (
     <section className="section-enter">
@@ -44,7 +46,7 @@ export function CategoryDepartmentGrid() {
           >
             <div className="relative h-40 overflow-hidden sm:h-44">
               <img
-                src={DEPARTMENT_IMAGES[dept]}
+                src={getDepartmentImage(dept, departmentImages)}
                 alt={t(DEPARTMENT_TITLE_KEYS[dept])}
                 className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                 loading="lazy"

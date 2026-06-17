@@ -40,7 +40,7 @@ export function filterProductsByDepartment(products: Product[], department: Shop
   return products.filter((product) => productBelongsToDepartment(product, department))
 }
 
-export const DEPARTMENT_IMAGES: Record<ShopDepartment, string> = {
+export const DEFAULT_DEPARTMENT_IMAGES: Record<ShopDepartment, string> = {
   prebuilt: '/categories/prebuilt.svg',
   'pc-parts':
     'https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&w=800&q=80',
@@ -48,4 +48,16 @@ export const DEPARTMENT_IMAGES: Record<ShopDepartment, string> = {
   laptops:
     'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=80',
   accessories: '/categories/accessories.svg',
+}
+
+/** @deprecated Use DEFAULT_DEPARTMENT_IMAGES */
+export const DEPARTMENT_IMAGES = DEFAULT_DEPARTMENT_IMAGES
+
+export function getDepartmentImage(
+  department: ShopDepartment,
+  overrides?: Partial<Record<ShopDepartment, string>>,
+): string {
+  const custom = overrides?.[department]?.trim()
+  if (custom) return custom
+  return DEFAULT_DEPARTMENT_IMAGES[department]
 }

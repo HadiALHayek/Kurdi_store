@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { ShopDepartment } from '../types'
 
 export interface StoreSettings {
   instagramHandle: string
@@ -10,6 +11,7 @@ export interface StoreSettings {
   lowStockThreshold: number
   assemblyNote: string
   backorderLeadDays: string
+  departmentImages: Partial<Record<ShopDepartment, string>>
 }
 
 const STORAGE_KEY = 'kurdi_store_settings'
@@ -24,6 +26,7 @@ export const defaultStoreSettings = (): StoreSettings => ({
   lowStockThreshold: 3,
   assemblyNote: '',
   backorderLeadDays: '2-3',
+  departmentImages: {},
 })
 
 const isEmptyStoreProfile = (parsed: Partial<StoreSettings>) =>
@@ -44,7 +47,7 @@ const loadSettings = (): StoreSettings => {
       persist(next)
       return next
     }
-    return { ...defaultStoreSettings(), ...parsed }
+    return { ...defaultStoreSettings(), ...parsed, departmentImages: { ...defaultStoreSettings().departmentImages, ...parsed.departmentImages } }
   } catch {
     return defaultStoreSettings()
   }

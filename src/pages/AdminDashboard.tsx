@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
 import { AdminBulkCsv } from '../components/admin/AdminBulkCsv'
+import { AdminDepartmentImages } from '../components/admin/AdminDepartmentImages'
 import { AdminChangePassword } from '../components/admin/AdminChangePassword'
 import { AdminCustomers } from '../components/admin/AdminCustomers'
 import { PrebuiltSpecsEditor } from '../components/admin/PrebuiltSpecsEditor'
@@ -468,6 +469,15 @@ export function AdminDashboard() {
               }
               className="input-field w-full rounded-xl px-3 py-2.5"
               placeholder="2-3"
+            />
+
+            <AdminDepartmentImages
+              images={settingsDraft.departmentImages ?? {}}
+              onChange={(departmentImages) => setSettingsDraft((prev) => ({ ...prev, departmentImages }))}
+              onToast={(message) => {
+                setToast(message)
+                setTimeout(() => setToast(''), 2200)
+              }}
             />
 
             <div className="mt-6 rounded-xl border border-border p-4">
