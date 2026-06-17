@@ -1,6 +1,5 @@
 import { create } from 'zustand'
-import { defaultDepartments } from '../data/defaultDepartments'
-import type { StoreDepartmentConfig } from '../types'
+import type { ShopDepartment } from '../types'
 
 export interface StoreSettings {
   instagramHandle: string
@@ -12,7 +11,7 @@ export interface StoreSettings {
   lowStockThreshold: number
   assemblyNote: string
   backorderLeadDays: string
-  departments: StoreDepartmentConfig[]
+  departmentImages: Partial<Record<ShopDepartment, string>>
 }
 
 const STORAGE_KEY = 'kurdi_store_settings'
@@ -27,7 +26,7 @@ export const defaultStoreSettings = (): StoreSettings => ({
   lowStockThreshold: 3,
   assemblyNote: '',
   backorderLeadDays: '2-3',
-  departments: defaultDepartments(),
+  departmentImages: {},
 })
 
 const isEmptyStoreProfile = (parsed: Partial<StoreSettings>) =>
@@ -37,19 +36,6 @@ const isEmptyStoreProfile = (parsed: Partial<StoreSettings>) =>
   !String(parsed.workingHours ?? '').trim() &&
   !String(parsed.phone ?? '').trim() &&
   !String(parsed.googleMapsEmbedUrl ?? '').trim()
-
-function migrateDepartments(parsed: Partial<StoreSettings>): StoreDepartmentConfig[] {
-  if (parsed.departments && parsed.departments.length > 0) {
-    return parsed.departments
-  }
-  const defaults = defaultDepartments()
-  const legacyImages = (parsed as { departmentImages?: Record<string, string> }).departmentImages
-  if (!legacyImages) return defaults
-  return defaults.map((dept) => ({
-    ...dept,
-    image: legacyImages[dept.id]?.trim() || dept.image,
-  }))
-}
 
 const loadSettings = (): StoreSettings => {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -61,12 +47,7 @@ const loadSettings = (): StoreSettings => {
       persist(next)
       return next
     }
-    const base = defaultStoreSettings()
-    return {
-      ...base,
-      ...parsed,
-      departments: migrateDepartments(parsed),
-    }
+    return { ...defaultStoreSettings(), ...parsed, departmentImages: { ...defaultStoreSettings().departmentImages, ...parsed.departmentImages } }
   } catch {
     return defaultStoreSettings()
   }

@@ -1,4 +1,4 @@
-import type { Category, Product, ShopDepartment, StoreDepartmentConfig, UseCaseTag } from '../types'
+import type { Category, Product, ShopDepartment, UseCaseTag } from '../types'
 import { addSpecValue, getSpecKeys, getSpecValues } from './productSpecs'
 import { isShopDepartment } from './shopDepartments'
 
@@ -179,22 +179,13 @@ function findExistingProduct(existing: Product[], id: string, sku: string): Prod
   return undefined
 }
 
-function parseDepartment(
-  value: string | undefined,
-  existing?: ShopDepartment,
-  departments?: StoreDepartmentConfig[],
-): ShopDepartment | undefined {
+function parseDepartment(value: string | undefined, existing?: ShopDepartment): ShopDepartment | undefined {
   const trimmed = (value ?? '').trim()
-  if (isShopDepartment(trimmed, departments)) return trimmed
+  if (isShopDepartment(trimmed)) return trimmed
   return existing
 }
 
-function rowToProduct(
-  cols: string[],
-  header: string[],
-  existing?: Product,
-  departments?: StoreDepartmentConfig[],
-): Product {
+function rowToProduct(cols: string[], header: string[], existing?: Product): Product {
   const get = (name: string) => {
     const index = header.indexOf(name)
     return index >= 0 ? (cols[index] ?? '').trim() : ''
@@ -216,7 +207,7 @@ function rowToProduct(
     name,
     description,
     category: parseCategory(get('category') || existing?.category),
-    department: parseDepartment(get('department'), existing?.department, departments),
+    department: parseDepartment(get('department'), existing?.department),
     price: Number.isNaN(price) ? 0 : price,
     previousPrice: previousPrice ?? existing?.previousPrice,
     stock: Number.isNaN(stock) ? existing?.stock ?? 0 : stock,
@@ -250,7 +241,6 @@ export function parseProductsCsv(
   text: string,
   existing: Product[],
   mode: CsvImportMode = 'merge',
-  departments?: StoreDepartmentConfig[],
 ): CsvImportResult {
   const lines = text.trim().split(/\r?\n/).filter(Boolean)
   if (lines.length < 2) {
@@ -281,11 +271,11 @@ export function parseProductsCsv(
     const match = findExistingProduct([...byId.values()], id, sku)
 
     if (match) {
-      const next = rowToProduct(cols, header, match, departments)
+      const next = rowToProduct(cols, header, match)
       byId.set(match.id, next)
       updated++
     } else {
-      const next = rowToProduct(cols, header, undefined, departments)
+      const next = rowToProduct(cols, header)
       byId.set(next.id, next)
       created++
     }

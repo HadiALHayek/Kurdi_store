@@ -1,5 +1,4 @@
-import type { Category, ShopDepartment, StoreDepartmentConfig } from '../types'
-import { findDepartmentById, getActiveDepartments, inferDepartmentFromProduct } from './shopDepartments'
+import type { Category, Product, ShopDepartment } from '../types'
 
 const prebuiltSpecKeys = [
   'cpu',
@@ -108,26 +107,9 @@ export const ALL_STORE_FILTER_CATEGORIES: Category[] = [
 
 export function getStoreCategoryFilterOptions(
   department: ShopDepartment | null,
-  departments?: StoreDepartmentConfig[],
 ): Array<Category | 'All'> {
   if (!department) return ['All', ...ALL_STORE_FILTER_CATEGORIES]
-  const dept = findDepartmentById(department, getActiveDepartments(departments))
-  return ['All', ...(dept?.categories ?? ALL_STORE_FILTER_CATEGORIES)]
-}
-
-export function categoriesForDepartment(
-  department: ShopDepartment,
-  departments?: StoreDepartmentConfig[],
-): Category[] {
-  return findDepartmentById(department, getActiveDepartments(departments))?.categories ?? []
-}
-
-export function defaultCategoryForDepartment(
-  department: ShopDepartment,
-  departments?: StoreDepartmentConfig[],
-): Category {
-  const cats = categoriesForDepartment(department, departments)
-  return cats[0] ?? 'CPU'
+  return ['All', ...DEPARTMENT_CATEGORIES[department]]
 }
 
 const sharedValueOptions: Record<string, string[]> = {
@@ -203,15 +185,31 @@ const sharedValueOptions: Record<string, string[]> = {
   type: ['Stand', 'Mouse pad', 'Hub', 'Adapter', 'Bag', 'Other'],
 }
 
-export { inferDepartmentFromProduct }
+export function categoriesForDepartment(department: ShopDepartment): Category[] {
+  return DEPARTMENT_CATEGORIES[department]
+}
+
+export function defaultCategoryForDepartment(department: ShopDepartment): Category {
+  return DEPARTMENT_CATEGORIES[department][0]
+}
+
+export function inferDepartmentFromProduct(product: Pick<Product, 'category' | 'department'>): ShopDepartment {
+  const departments: ShopDepartment[] = ['pc-parts', 'prebuilt', 'monitors', 'laptops', 'accessories']
+  if (product.department && departments.includes(product.department)) return product.department
+  if (product.category === 'Prebuilt PC') return 'prebuilt'
+  if (PC_PART_CATEGORIES.includes(product.category)) return 'pc-parts'
+  if (MONITOR_CATEGORIES.includes(product.category)) return 'monitors'
+  if (LAPTOP_CATEGORIES.includes(product.category)) return 'laptops'
+  return 'accessories'
+}
 
 export function getAdminSpecKeys(department: ShopDepartment, category: Category): readonly string[] {
-  if (category === 'Prebuilt PC' || department === 'prebuilt') return prebuiltSpecKeys
-  if (PC_PART_CATEGORIES.includes(category) || department === 'pc-parts') {
+  if (department === 'prebuilt') return prebuiltSpecKeys
+  if (department === 'pc-parts') {
     return pcPartCategorySpecKeys[category] ?? [...compatibilitySpecKeys]
   }
-  if (category === 'Monitor' || department === 'monitors') return monitorSpecKeys
-  if (category === 'Laptop' || department === 'laptops') return laptopSpecKeys
+  if (department === 'monitors') return monitorSpecKeys
+  if (department === 'laptops') return laptopSpecKeys
   return accessoryCategorySpecKeys[category] ?? otherAccessorySpecKeys
 }
 
