@@ -45,7 +45,7 @@ export function CategoryDepartmentGrid() {
             <div className="relative h-40 overflow-hidden sm:h-44">
               <img
                 src={DEPARTMENT_IMAGES[dept]}
-                alt=""
+                alt={t(DEPARTMENT_TITLE_KEYS[dept])}
                 className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                 loading="lazy"
               />

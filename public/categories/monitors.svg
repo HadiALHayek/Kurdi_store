@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0c1220"/>
+      <stop offset="1" stop-color="#151028"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="200" y1="80" x2="600" y2="280" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0ea5e9"/>
+      <stop offset="0.5" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="440" fill="url(#bg)"/>
+  <ellipse cx="400" cy="370" rx="200" ry="28" fill="#000" fill-opacity="0.3"/>
+  <!-- Desk -->
+  <rect x="140" y="310" width="520" height="14" rx="4" fill="#1e293b"/>
+  <rect x="360" y="280" width="80" height="30" rx="4" fill="#334155"/>
+  <rect x="385" y="324" width="30" height="46" rx="2" fill="#475569"/>
+  <!-- Monitor -->
+  <rect x="180" y="70" width="440" height="220" rx="14" fill="#1e293b" stroke="#475569" stroke-width="3"/>
+  <rect x="200" y="90" width="400" height="180" rx="8" fill="#0f172a"/>
+  <rect x="200" y="90" width="400" height="180" rx="8" fill="url(#screen)" fill-opacity="0.25"/>
+  <!-- Screen UI lines -->
+  <rect x="230" y="120" width="160" height="10" rx="5" fill="#22d3ee" fill-opacity="0.8"/>
+  <rect x="230" y="145" width="120" height="6" rx="3" fill="#94a3b8" fill-opacity="0.5"/>
+  <rect x="230" y="165" width="200" height="6" rx="3" fill="#94a3b8" fill-opacity="0.35"/>
+  <rect x="230" y="200" width="80" height="40" rx="6" fill="#22d3ee" fill-opacity="0.3"/>
+  <rect x="330" y="200" width="80" height="40" rx="6" fill="#a855f7" fill-opacity="0.3"/>
+  <rect x="430" y="200" width="80" height="40" rx="6" fill="#ec4899" fill-opacity="0.25"/>
+  <!-- Second smaller monitor -->
+  <rect x="560" y="130" width="140" height="100" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <rect x="572" y="142" width="116" height="76" rx="4" fill="#0f172a" stroke="#22d3ee" stroke-width="1" stroke-opacity="0.5"/>
+</svg>

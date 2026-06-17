@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 440" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="800" y2="440" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101820"/>
+      <stop offset="1" stop-color="#1a1428"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="200" y1="100" x2="600" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="440" fill="url(#bg)"/>
+  <ellipse cx="400" cy="360" rx="240" ry="36" fill="#000" fill-opacity="0.28"/>
+  <!-- Keyboard -->
+  <rect x="120" y="220" width="360" height="110" rx="12" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+  <rect x="140" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="180" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="220" y="240" width="32" height="24" rx="4" fill="url(#accent)" fill-opacity="0.5"/>
+  <rect x="260" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="300" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="340" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="380" y="240" width="32" height="24" rx="4" fill="#334155"/>
+  <rect x="140" y="275" width="272" height="20" rx="4" fill="#0f172a" stroke="#334155"/>
+  <rect x="430" y="275" width="32" height="20" rx="4" fill="url(#accent)" fill-opacity="0.4"/>
+  <!-- Mouse -->
+  <ellipse cx="560" cy="275" rx="48" ry="68" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+  <line x1="560" y1="220" x2="560" y2="260" stroke="#22d3ee" stroke-width="2" stroke-opacity="0.6"/>
+  <circle cx="560" cy="250" r="6" fill="#22d3ee" fill-opacity="0.5"/>
+  <!-- Headset -->
+  <path d="M620 140 C620 90 700 70 720 120 C740 90 760 100 760 150 L760 200 C760 230 740 250 720 250 L700 250 L700 290 L640 290 L640 250 L620 250 C590 250 570 230 570 200 L570 150 C570 120 590 140 620 140Z" fill="#1e293b" stroke="url(#accent)" stroke-width="2"/>
+  <rect x="600" y="160" width="36" height="50" rx="18" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <rect x="694" y="160" width="36" height="50" rx="18" fill="#0f172a" stroke="#a855f7" stroke-width="1.5"/>
+  <!-- Webcam -->
+  <rect x="200" y="100" width="100" height="56" rx="10" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+  <circle cx="250" cy="128" r="18" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
+  <circle cx="250" cy="128" r="8" fill="#22d3ee" fill-opacity="0.45"/>
+  <rect x="235" y="148" width="30" height="8" rx="4" fill="#334155"/>
+</svg>

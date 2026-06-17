@@ -41,14 +41,11 @@ export function filterProductsByDepartment(products: Product[], department: Shop
 }
 
 export const DEPARTMENT_IMAGES: Record<ShopDepartment, string> = {
-  prebuilt:
-    'https://images.unsplash.com/photo-1587202372775-e229f172b9b7?auto=format&fit=crop&w=800&q=80',
+  prebuilt: '/categories/prebuilt.svg',
   'pc-parts':
     'https://images.unsplash.com/photo-1591488320449-011701bb6704?auto=format&fit=crop&w=800&q=80',
-  monitors:
-    'https://images.unsplash.com/photo-1527443224154-c4f394f6b9fd?auto=format&fit=crop&w=800&q=80',
+  monitors: '/categories/monitors.svg',
   laptops:
     'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?auto=format&fit=crop&w=800&q=80',
-  accessories:
-    'https://images.unsplash.com/photo-1618384887929-16ec33dab9ff?auto=format&fit=crop&w=800&q=80',
+  accessories: '/categories/accessories.svg',
 }
