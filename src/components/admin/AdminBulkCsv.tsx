@@ -2,6 +2,7 @@ import { Download, ImagePlus, Upload } from 'lucide-react'
 import { useMemo, useRef } from 'react'
 import { useI18n } from '../../i18n'
 import { useProductsStore } from '../../store/productsStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import type { Product } from '../../types'
 import {
   downloadCsv,
@@ -19,6 +20,7 @@ interface AdminBulkCsvProps {
 export function AdminBulkCsv({ onToast }: AdminBulkCsvProps) {
   const { t } = useI18n()
   const products = useProductsStore((s) => s.products)
+  const departments = useSettingsStore((s) => s.settings.departments)
   const importProducts = useProductsStore((s) => s.importProducts)
   const updateProduct = useProductsStore((s) => s.updateProduct)
   const csvInputRef = useRef<HTMLInputElement>(null)
@@ -28,7 +30,7 @@ export function AdminBulkCsv({ onToast }: AdminBulkCsvProps) {
   const handleImportCsv = async (file: File, replace: boolean) => {
     try {
       const text = await file.text()
-      const result = parseProductsCsv(text, products, replace ? 'replace' : 'merge')
+      const result = parseProductsCsv(text, products, replace ? 'replace' : 'merge', departments)
       importProducts(result.products)
       onToast(
         t('csvImportSummary')

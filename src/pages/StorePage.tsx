@@ -16,8 +16,9 @@ import { trackEvent } from '../store/analyticsStore'
 import { useBuilderStore } from '../store/builderStore'
 
 import { useProductsStore } from '../store/productsStore'
-
+import { useSettingsStore } from '../store/settingsStore'
 import type { Category, ShopDepartment } from '../types'
+import { getDepartmentDescription } from '../utils/departmentLabels'
 
 import { CategoryFilter } from '../components/ui/CategoryFilter'
 import { ProductCard } from '../components/ui/ProductCard'
@@ -26,7 +27,7 @@ import { useI18n } from '../i18n'
 
 import { countProductsForFilterValue } from '../utils/filterCounts'
 import { isStorefrontProduct } from '../utils/productCsv'
-import { filterProductsByDepartment, isShopDepartment } from '../utils/shopDepartments'
+import { filterProductsByDepartment, findDepartmentById, isShopDepartment } from '../utils/shopDepartments'
 import { getStoreCategoryFilterOptions, isBuilderCategory } from '../utils/adminDepartmentSpecs'
 
 import {
@@ -77,28 +78,34 @@ function parseCategoryFromParams(
 
 export function StorePage() {
 
-  const { t } = useI18n()
+  const { t, isArabic } = useI18n()
 
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const location = useLocation()
 
   const allProducts = useProductsStore((state) => state.products)
+  const departments = useSettingsStore((state) => state.settings.departments)
   const products = useMemo(() => allProducts.filter(isStorefrontProduct), [allProducts])
 
   const department = useMemo((): ShopDepartment | null => {
     const value = searchParams.get('department')
-    return isShopDepartment(value) ? value : null
-  }, [searchParams])
+    return isShopDepartment(value, departments) ? value : null
+  }, [searchParams, departments])
+
+  const activeDepartment = useMemo(
+    () => (department ? findDepartmentById(department, departments) : undefined),
+    [department, departments],
+  )
 
   const catalogProducts = useMemo(
-    () => filterProductsByDepartment(products, department),
-    [products, department],
+    () => filterProductsByDepartment(products, department, departments),
+    [products, department, departments],
   )
 
   const categoryFilterOptions = useMemo(
-    () => getStoreCategoryFilterOptions(department),
-    [department],
+    () => getStoreCategoryFilterOptions(department, departments),
+    [department, departments],
   )
 
   const selectPart = useBuilderStore((state) => state.selectPart)
@@ -229,12 +236,9 @@ export function StorePage() {
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-brand-cyan">{t('navProducts')}</p>
           <h1 className="text-gradient-brand font-display text-3xl font-bold sm:text-4xl">{t('productsPageTitle')}</h1>
           <p className="mt-2 max-w-xl text-base text-text-muted">
-            {department === 'prebuilt' && t('deptPrebuiltDesc')}
-            {department === 'pc-parts' && t('deptPcPartsDesc')}
-            {department === 'monitors' && t('deptMonitorsDesc')}
-            {department === 'laptops' && t('deptLaptopsDesc')}
-            {department === 'accessories' && t('deptAccessoriesDesc')}
-            {!department && t('productsPageDesc')}
+            {activeDepartment
+              ? getDepartmentDescription(activeDepartment, isArabic)
+              : t('productsPageDesc')}
           </p>
         </div>
       </section>

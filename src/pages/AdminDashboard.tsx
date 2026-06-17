@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Navigate } from 'react-router-dom'
 import { AdminBulkCsv } from '../components/admin/AdminBulkCsv'
-import { AdminDepartmentImages } from '../components/admin/AdminDepartmentImages'
+import { AdminDepartmentsManager } from '../components/admin/AdminDepartmentsManager'
 import { AdminChangePassword } from '../components/admin/AdminChangePassword'
 import { AdminCustomers } from '../components/admin/AdminCustomers'
 import { PrebuiltSpecsEditor } from '../components/admin/PrebuiltSpecsEditor'
@@ -20,26 +20,15 @@ import { formatPrice } from '../utils/compatibility'
 import { downloadCsv, parseProductsCsv, productsToCsv } from '../utils/productCsv'
 import { compressImageFile } from '../utils/imageUpload'
 import { addSpecValue, getSpecKeys, getSpecValues, removeSpecValue } from '../utils/productSpecs'
+import { getDepartmentName } from '../utils/departmentLabels'
 import {
   categoriesForDepartment,
   defaultCategoryForDepartment,
   getAdminSpecConfig,
   inferDepartmentFromProduct,
 } from '../utils/adminDepartmentSpecs'
-import { SHOP_DEPARTMENTS } from '../utils/shopDepartments'
 
 type View = 'products' | 'add' | 'analytics' | 'customers' | 'settings'
-
-const DEPT_LABEL_KEY: Record<
-  ShopDepartment,
-  'deptPrebuilt' | 'deptPcParts' | 'deptMonitors' | 'deptLaptops' | 'deptAccessories'
-> = {
-  prebuilt: 'deptPrebuilt',
-  'pc-parts': 'deptPcParts',
-  monitors: 'deptMonitors',
-  laptops: 'deptLaptops',
-  accessories: 'deptAccessories',
-}
 
 const DEPT_SPECS_HINT_KEY: Record<
   ShopDepartment,
@@ -212,7 +201,7 @@ export function AdminDashboard() {
                     if (!file) return
                     try {
                       const text = await file.text()
-                      const result = parseProductsCsv(text, products, 'merge')
+                      const result = parseProductsCsv(text, products, 'merge', settingsDraft.departments)
                       importProducts(result.products)
                       setToast(
                         t('csvImportSummary')
@@ -280,7 +269,7 @@ export function AdminDashboard() {
                           onClick={() =>
                             setEditing({
                               ...product,
-                              department: inferDepartmentFromProduct(product),
+                              department: inferDepartmentFromProduct(product, settingsDraft.departments),
                             })
                           }
                         >
@@ -471,9 +460,9 @@ export function AdminDashboard() {
               placeholder="2-3"
             />
 
-            <AdminDepartmentImages
-              images={settingsDraft.departmentImages ?? {}}
-              onChange={(departmentImages) => setSettingsDraft((prev) => ({ ...prev, departmentImages }))}
+            <AdminDepartmentsManager
+              departments={settingsDraft.departments}
+              onChange={(departments) => setSettingsDraft((prev) => ({ ...prev, departments }))}
               onToast={(message) => {
                 setToast(message)
                 setTimeout(() => setToast(''), 2200)
@@ -682,10 +671,11 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
   submitLabel,
   excludeProductId,
 }: ProductFormProps<T>) {
-  const { t } = useI18n()
+  const { t, isArabic } = useI18n()
   const storeProducts = useProductsStore((state) => state.products)
+  const departments = useSettingsStore((state) => state.settings.departments)
   const department = draft.department ?? 'pc-parts'
-  const departmentCategories = categoriesForDepartment(department)
+  const departmentCategories = categoriesForDepartment(department, departments)
   const safeCategory = departmentCategories.includes(draft.category)
     ? draft.category
     : departmentCategories[0]
@@ -698,7 +688,7 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
   const safeSpecValue = valueOptions.includes(specValue) ? specValue : valueOptions[0] ?? ''
 
   const changeDepartment = (nextDepartment: ShopDepartment) => {
-    const nextCategory = defaultCategoryForDepartment(nextDepartment)
+    const nextCategory = defaultCategoryForDepartment(nextDepartment, departments)
     const nextConfig = getAdminSpecConfig(nextDepartment, nextCategory)
     const nextKey = nextConfig.specKeys[0] ?? ''
     setDraft({ ...draft, department: nextDepartment, category: nextCategory, specs: {} })
@@ -745,9 +735,9 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
           className="input-field w-full rounded-xl px-3 py-2.5"
           required
         >
-          {SHOP_DEPARTMENTS.map((dept) => (
-            <option key={dept} value={dept}>
-              {t(DEPT_LABEL_KEY[dept])}
+          {departments.map((dept) => (
+            <option key={dept.id} value={dept.id}>
+              {getDepartmentName(dept, isArabic)}
             </option>
           ))}
         </select>
@@ -980,7 +970,11 @@ function ProductForm<T extends Omit<Product, 'id' | 'createdAt'>>({
         <FormFieldLabel required>
           <span className="text-sm text-white">{t('fieldSpecs')}</span>
         </FormFieldLabel>
-        <p className="text-sm text-text-muted">{t(DEPT_SPECS_HINT_KEY[department])}</p>
+        <p className="text-sm text-text-muted">
+          {DEPT_SPECS_HINT_KEY[department as keyof typeof DEPT_SPECS_HINT_KEY]
+            ? t(DEPT_SPECS_HINT_KEY[department as keyof typeof DEPT_SPECS_HINT_KEY])
+            : t('specsHintCustom')}
+        </p>
         <p className="text-xs text-text-muted">{t('fieldSpecsHint')}</p>
         {department === 'prebuilt' ? (
           <PrebuiltSpecsEditor

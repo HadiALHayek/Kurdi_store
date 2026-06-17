@@ -17,7 +17,17 @@ export type Category =
   | 'Cable'
   | 'Other Accessory'
 
-export type ShopDepartment = 'pc-parts' | 'prebuilt' | 'monitors' | 'laptops' | 'accessories'
+export type ShopDepartment = string
+
+export interface StoreDepartmentConfig {
+  id: string
+  nameEn: string
+  nameAr: string
+  descriptionEn: string
+  descriptionAr: string
+  image: string
+  categories: Category[]
+}
 
 export type BuilderSlotId =
   | 'CPU'
