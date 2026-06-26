@@ -41,13 +41,26 @@ const loadSettings = (): StoreSettings => {
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) return defaultStoreSettings()
   try {
-    const parsed = JSON.parse(raw) as Partial<StoreSettings>
+    const parsed = JSON.parse(raw) as Partial<StoreSettings> & {
+      departments?: Array<{ id: string; image?: string }>
+    }
     if (isEmptyStoreProfile(parsed)) {
       const next = defaultStoreSettings()
       persist(next)
       return next
     }
-    return { ...defaultStoreSettings(), ...parsed, departmentImages: { ...defaultStoreSettings().departmentImages, ...parsed.departmentImages } }
+    const base = defaultStoreSettings()
+    const departmentImages = { ...base.departmentImages, ...parsed.departmentImages }
+    if (Array.isArray(parsed.departments)) {
+      for (const dept of parsed.departments) {
+        const id = dept?.id as ShopDepartment | undefined
+        const image = dept?.image?.trim()
+        if (id && image && id in base.departmentImages) {
+          departmentImages[id] = image
+        }
+      }
+    }
+    return { ...base, ...parsed, departmentImages }
   } catch {
     return defaultStoreSettings()
   }

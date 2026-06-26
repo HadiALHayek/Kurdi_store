@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import { useI18n } from '../../i18n'
 import { adminLogout } from '../../utils/adminAuth'
+import { clearApiSession } from '../../utils/leadsApi'
 
 type AdminView = 'products' | 'add' | 'analytics' | 'customers' | 'settings'
 
@@ -57,6 +58,7 @@ export function AdminLayout({ active, onNavigate, children }: AdminLayoutProps) 
           type="button"
           onClick={() => {
             adminLogout()
+            void clearApiSession()
             navigate('/admin', { replace: true })
           }}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger transition hover:bg-danger/20 md:mt-6"

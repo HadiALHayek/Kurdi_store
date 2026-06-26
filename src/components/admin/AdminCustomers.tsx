@@ -1,4 +1,5 @@
-import { Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Trash2, RefreshCw } from 'lucide-react'
 import { useI18n } from '../../i18n'
 import { useCustomersStore } from '../../store/customersStore'
 import { formatPrice } from '../../utils/compatibility'
@@ -10,11 +11,28 @@ interface AdminCustomersProps {
 export function AdminCustomers({ onToast }: AdminCustomersProps) {
   const { t } = useI18n()
   const requests = useCustomersStore((s) => s.requests)
+  const loading = useCustomersStore((s) => s.loading)
+  const error = useCustomersStore((s) => s.error)
+  const fetchLeads = useCustomersStore((s) => s.fetchLeads)
   const removeRequest = useCustomersStore((s) => s.removeRequest)
   const clearAll = useCustomersStore((s) => s.clearAll)
   const exportCsv = useCustomersStore((s) => s.exportCsv)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  useEffect(() => {
+    void fetchLeads()
+  }, [fetchLeads])
 
   const sorted = [...requests].reverse()
+
+  const errorMessage =
+    error === 'unauthorized'
+      ? t('customersAuthRequired')
+      : error === 'offline_unsynced'
+        ? t('customersOfflineUnsynced')
+        : error
+          ? t('customersFetchFailed')
+          : null
 
   return (
     <div className="space-y-4">
@@ -29,7 +47,22 @@ export function AdminCustomers({ onToast }: AdminCustomersProps) {
         </div>
       </div>
 
+      {errorMessage && (
+        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+          {errorMessage}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="chip inline-flex items-center gap-2 px-4 py-2 text-sm"
+          disabled={loading}
+          onClick={() => void fetchLeads()}
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          {loading ? t('loadingCustomers') : t('refreshCustomers')}
+        </button>
         <button
           type="button"
           className="btn-primary rounded-lg px-4 py-2 text-sm"
@@ -52,8 +85,7 @@ export function AdminCustomers({ onToast }: AdminCustomersProps) {
           disabled={requests.length === 0}
           onClick={() => {
             if (window.confirm(t('confirmClearCustomers'))) {
-              clearAll()
-              onToast(t('customersCleared'))
+              void clearAll().then(() => onToast(t('customersCleared')))
             }
           }}
         >
@@ -61,7 +93,11 @@ export function AdminCustomers({ onToast }: AdminCustomersProps) {
         </button>
       </div>
 
-      {sorted.length === 0 ? (
+      {loading && requests.length === 0 ? (
+        <p className="rounded-xl border border-border bg-surface-2/60 p-6 text-center text-sm text-text-muted">
+          {t('loadingCustomers')}
+        </p>
+      ) : sorted.length === 0 ? (
         <p className="rounded-xl border border-border bg-surface-2/60 p-6 text-center text-sm text-text-muted">
           {t('noCustomers')}
         </p>
@@ -99,11 +135,15 @@ export function AdminCustomers({ onToast }: AdminCustomersProps) {
                   <td className="p-3">
                     <button
                       type="button"
-                      className="text-text-muted transition hover:text-danger"
+                      className="text-text-muted transition hover:text-danger disabled:opacity-50"
                       title={t('delete')}
+                      disabled={deletingId === request.id}
                       onClick={() => {
                         if (window.confirm(t('confirmDeleteCustomer'))) {
-                          removeRequest(request.id)
+                          setDeletingId(request.id)
+                          void removeRequest(request.id)
+                            .catch(() => onToast(t('customersDeleteFailed')))
+                            .finally(() => setDeletingId(null))
                         }
                       }}
                     >

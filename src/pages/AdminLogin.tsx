@@ -7,6 +7,7 @@ import {
   getLockoutStatus,
   isAdminSessionValid,
 } from '../utils/adminAuth'
+import { establishApiSession } from '../utils/leadsApi'
 
 export function AdminLogin() {
   const { t, lang, setLang } = useI18n()
@@ -48,6 +49,7 @@ export function AdminLogin() {
     try {
       const result = await adminLogin(password)
       if (result.ok) {
+        await establishApiSession(password)
         navigate('/admin/dashboard')
         return
       }

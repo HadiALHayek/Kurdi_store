@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useI18n } from '../../i18n'
+import { FooterContactButton } from './FooterContactButton'
 
 export function Footer() {
   const { t } = useI18n()
@@ -24,6 +25,7 @@ export function Footer() {
             <Link to="/admin" className="text-text-muted transition hover:text-brand-cyan">
               {t('navAdmin')}
             </Link>
+            <FooterContactButton />
           </div>
         </div>
         <div className="mt-6 border-t border-border pt-4 text-center text-xs text-text-muted sm:text-left">

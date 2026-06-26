@@ -18,11 +18,13 @@ export function BuildActions() {
   const build = useBuilderStore((s) => s.build)
   const settings = useSettingsStore((s) => s.settings)
   const registerBuild = useBuildCodesStore((s) => s.registerBuild)
-  const addCustomerRequest = useCustomersStore((s) => s.addRequest)
+  const submitLead = useCustomersStore((s) => s.submitLead)
   const [copied, setCopied] = useState<'list' | 'link' | 'code' | null>(null)
   const [buildCode, setBuildCode] = useState('')
   const [quoteModalOpen, setQuoteModalOpen] = useState(false)
   const [quoteSavedMessage, setQuoteSavedMessage] = useState('')
+  const [quoteErrorMessage, setQuoteErrorMessage] = useState('')
+  const [quoteSubmitting, setQuoteSubmitting] = useState(false)
 
   const selectedBuild = useMemo(() => normalizeBuildMap(build), [build])
   const buildTotal = useMemo(() => getSelectedBuildTotal(selectedBuild), [selectedBuild])
@@ -38,6 +40,7 @@ export function BuildActions() {
   useEffect(() => {
     setBuildCode('')
     setQuoteSavedMessage('')
+    setQuoteErrorMessage('')
   }, [selectionKey])
 
   const copyText = async (text: string, kind: 'list' | 'link' | 'code') => {
@@ -57,22 +60,31 @@ export function BuildActions() {
     hours: settings.workingHours,
   }
 
-  const handleQuoteSubmit = (name: string, phone: string) => {
+  const handleQuoteSubmit = async (name: string, phone: string) => {
     const code = registerBuild(selectedBuild)
     setBuildCode(code)
+    setQuoteErrorMessage('')
+    setQuoteSubmitting(true)
 
-    addCustomerRequest({
+    const result = await submitLead({
       name,
       phone,
       partsSummary: formatBuildPartsSummary(selectedBuild),
       partCount: Object.keys(selectedBuild).length,
       total: buildTotal,
       buildCode: code || undefined,
+      source: 'builder',
     })
+
+    setQuoteSubmitting(false)
+
+    if (!result.ok) {
+      setQuoteErrorMessage(t('customerQuoteFailed'))
+      return
+    }
 
     trackEvent('quote_request', {
       parts: String(Object.keys(selectedBuild).length),
-      customer: name,
       channel: 'admin',
     })
 
@@ -94,6 +106,11 @@ export function BuildActions() {
         {quoteSavedMessage && (
           <p className="rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
             {quoteSavedMessage}
+          </p>
+        )}
+        {quoteErrorMessage && (
+          <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            {quoteErrorMessage}
           </p>
         )}
 
@@ -188,6 +205,7 @@ export function BuildActions() {
         open={quoteModalOpen}
         onClose={() => setQuoteModalOpen(false)}
         onSubmit={handleQuoteSubmit}
+        submitting={quoteSubmitting}
       />
     </>
   )

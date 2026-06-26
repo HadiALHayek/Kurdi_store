@@ -125,6 +125,8 @@ export interface AnalyticsEvent {
   at: number
 }
 
+export type LeadSource = 'builder' | 'contact' | 'product'
+
 export interface CustomerQuoteRequest {
   id: string
   name: string
@@ -133,5 +135,8 @@ export interface CustomerQuoteRequest {
   partCount: number
   total: number
   buildCode?: string
+  source?: LeadSource
   createdAt: number
+  /** Local-only: saved when API was unavailable */
+  synced?: boolean
 }
